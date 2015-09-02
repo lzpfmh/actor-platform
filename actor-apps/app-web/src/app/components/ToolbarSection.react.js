@@ -49,19 +49,18 @@ class ToolbarSection extends React.Component {
   };
 
   render() {
-    const info = this.state.dialogInfo;
-    const isActivityOpen = this.state.isActivityOpen;
+    const { dialogInfo, isActivityOpen } = this.state;
 
-    let infoButtonClassName = classnames('button button--icon', {
+    const infoButtonClassName = classnames('button button--icon', {
       'button--active': isActivityOpen
     });
 
-    if (info != null) {
+    if (dialogInfo !== null) {
       return (
         <header className="toolbar row">
           <div className="toolbar__peer col-xs">
-            <span className="toolbar__peer__title">{info.name}</span>
-            <span className="toolbar__peer__presence">{info.presence}</span>
+            <span className="toolbar__peer__title">{dialogInfo.name}</span>
+            <span className="toolbar__peer__presence">{dialogInfo.presence}</span>
           </div>
 
           <div className="toolbar__controls">
