@@ -1,6 +1,6 @@
 package im.actor.server.group
 
-import im.actor.server.api.ApiConversions._
+import im.actor.server.ApiConversions._
 import im.actor.api.rpc.groups.{ Group ⇒ ApiGroup, Member ⇒ ApiMember }
 
 private[group] trait GroupQueryHandlers extends GroupCommandHelpers {
@@ -40,7 +40,9 @@ private[group] trait GroupQueryHandlers extends GroupCommandHelpers {
       disableIntegrationsRevoke = None,
       isAdmin = Some(isAdmin(group, clientUserId)),
       theme = group.topic,
-      about = group.about
+      about = group.about,
+      isHidden = Some(group.isHidden),
+      extensions = group.extensions.toVector
     )
 
     sender() ! GetApiStructResponse(struct)
@@ -57,7 +59,10 @@ private[group] trait GroupQueryHandlers extends GroupCommandHelpers {
   }
 
   def isPublic(group: Group): Unit = {
-    sender() ! IsPublicResponse(isPublic = group.isPublic)
+    sender() ! IsPublicResponse(isPublic = group.typ == GroupType.Public)
   }
+
+  def getAccessHash(group: Group): Unit =
+    sender() ! GetAccessHashResponse(group.accessHash)
 
 }

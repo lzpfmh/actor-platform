@@ -598,7 +598,6 @@ class GroupsServiceSpec
 
   def e13() = {
     val (user1, authId1, _) = createUser()
-    val (user2, authId2, _) = createUser()
 
     implicit val clientData = ClientData(authId1, createSessionId(), Some(user1.id))
 

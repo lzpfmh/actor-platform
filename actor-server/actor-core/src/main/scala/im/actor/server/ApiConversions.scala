@@ -1,9 +1,10 @@
-package im.actor.server.api
+package im.actor.server
+
+import com.google.protobuf.ByteString
+import im.actor.api.rpc.files.{ Avatar ⇒ ApiAvatar, AvatarImage ⇒ ApiAvatarImage, FileLocation ⇒ ApiFileLocation }
+import im.actor.server.file.{ Avatar, AvatarImage, FileLocation }
 
 import scala.language.implicitConversions
-
-import im.actor.api.rpc.files.{ Avatar ⇒ ApiAvatar, AvatarImage ⇒ ApiAvatarImage, FileLocation ⇒ ApiFileLocation }
-import im.actor.server.file.{ FileLocation, AvatarImage, Avatar }
 
 object ApiConversions {
 

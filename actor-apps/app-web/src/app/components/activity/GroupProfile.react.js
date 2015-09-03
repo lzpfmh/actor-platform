@@ -79,11 +79,14 @@ class GroupProfile extends React.Component {
   }
 
   componentWillReceiveProps(newProps) {
-    this.setState(getStateFromStores(newProps.group.id));
-    if (newProps.group.id !== _prevGroupId && newProps.group.members.length > 0) {
-      GroupProfileActionCreators.getIntegrationToken(newProps.group.id);
-      _prevGroupId = newProps.group.id;
-    }
+    // FIXME!!!
+    setTimeout(() => {
+      this.setState(getStateFromStores(newProps.group.id));
+      if (newProps.group.id !== _prevGroupId && newProps.group.members.length > 0) {
+        GroupProfileActionCreators.getIntegrationToken(newProps.group.id);
+        _prevGroupId = newProps.group.id;
+      }
+    }, 0);
   }
 
   onAddMemberClick = group => {
