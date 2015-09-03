@@ -57,13 +57,15 @@ class GroupProfile extends React.Component {
 
   constructor(props) {
     super(props);
+    const myId = LoginStore.getMyId();
 
     this.state = assign({
       isMoreDropdownOpen: false,
       isCopyButtonEnabled: false
     }, getStateFromStores(props.group.id));
 
-    if (props.group.members.length > 0) {
+    if (props.group.members.length > 0 && myId === props.group.adminId) {
+      console.debug('admin get token');
       GroupProfileActionCreators.getIntegrationToken(props.group.id);
     }
 
@@ -79,10 +81,12 @@ class GroupProfile extends React.Component {
   }
 
   componentWillReceiveProps(newProps) {
+    const myId = LoginStore.getMyId();
     // FIXME!!!
     setTimeout(() => {
       this.setState(getStateFromStores(newProps.group.id));
-      if (newProps.group.id !== _prevGroupId && newProps.group.members.length > 0) {
+      if (newProps.group.id !== _prevGroupId && newProps.group.members.length > 0 && myId === newProps.group.adminId) {
+        console.debug('admin get token');
         GroupProfileActionCreators.getIntegrationToken(newProps.group.id);
         _prevGroupId = newProps.group.id;
       }
@@ -240,7 +244,7 @@ class GroupProfile extends React.Component {
               {groupMeta}
               <footer className="row">
                 <div className="col-xs">
-                  <button className="button button--light-blue"
+                  <button className="button button--flat button--wide"
                           onClick={() => this.onAddMemberClick(group)}>
                     <i className="material-icons">person_add</i>
                     <FormattedMessage message={this.getIntlMessage('addPeople')}/>
@@ -249,7 +253,8 @@ class GroupProfile extends React.Component {
                 <div style={{width: 10}}/>
                 <div className="col-xs">
                   <div className={dropdownClassNames}>
-                    <button className="dropdown__button button button--light-blue" onClick={this.toggleMoreDropdown}>
+                    <button className="dropdown__button button button--flat button--wide"
+                            onClick={this.toggleMoreDropdown}>
                       <i className="material-icons">more_horiz</i>
                       <FormattedMessage message={this.getIntlMessage('more')}/>
                     </button>
