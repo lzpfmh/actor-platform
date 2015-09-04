@@ -282,30 +282,44 @@ public class JsFacade implements Exportable {
         }
     }
 
-    public void deleteChat(JsPeer peer, final JsClosure success, final JsClosure error) {
-        messenger.deleteChat(peer.convert()).start(new CommandCallback<Boolean>() {
+    public JsPromise deleteChat(final JsPeer peer) {
+        return JsPromise.create(new JsPromiseExecutor() {
             @Override
-            public void onResult(Boolean res) {
-                success.callback();
-            }
+            public void execute() {
+                messenger.deleteChat(peer.convert()).start(new CommandCallback<Boolean>() {
+                    @Override
+                    public void onResult(Boolean res) {
+                        Log.d(TAG, "deleteChat:result");
+                        resolve();
+                    }
 
-            @Override
-            public void onError(Exception e) {
-                error.callback();
+                    @Override
+                    public void onError(Exception e) {
+                        Log.d(TAG, "deleteChat:error");
+                        reject(e.getMessage());
+                    }
+                });
             }
         });
     }
 
-    public void clearChat(JsPeer peer, final JsClosure success, final JsClosure error) {
-        messenger.clearChat(peer.convert()).start(new CommandCallback<Boolean>() {
+    public JsPromise clearChat(final JsPeer peer) {
+        return JsPromise.create(new JsPromiseExecutor() {
             @Override
-            public void onResult(Boolean res) {
-                success.callback();
-            }
+            public void execute() {
+                messenger.clearChat(peer.convert()).start(new CommandCallback<Boolean>() {
+                    @Override
+                    public void onResult(Boolean res) {
+                        Log.d(TAG, "clearChat:result");
+                        resolve();
+                    }
 
-            @Override
-            public void onError(Exception e) {
-                error.callback();
+                    @Override
+                    public void onError(Exception e) {
+                        Log.d(TAG, "clearChat:error");
+                        reject(e.getMessage());
+                    }
+                });
             }
         });
     }
@@ -506,7 +520,7 @@ public class JsFacade implements Exportable {
                     @Override
                     public void onError(Exception e) {
                         Log.d(TAG, "editMyName:error");
-                        reject();
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -528,7 +542,7 @@ public class JsFacade implements Exportable {
                     @Override
                     public void onError(Exception e) {
                         Log.d(TAG, "editMyNick:error");
-                        reject();
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -550,7 +564,7 @@ public class JsFacade implements Exportable {
                     @Override
                     public void onError(Exception e) {
                         Log.d(TAG, "editMyAbout:error");
-                        reject();
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -565,12 +579,14 @@ public class JsFacade implements Exportable {
                 messenger.editName(uid, newName).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "editName:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "editName:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -585,12 +601,14 @@ public class JsFacade implements Exportable {
                 messenger.joinGroupViaLink(url).start(new CommandCallback<Integer>() {
                     @Override
                     public void onResult(Integer res) {
+                        Log.d(TAG, "joinGroupViaLink:result");
                         resolve(JsPeer.create(Peer.group(res)));
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "joinGroupViaLink:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -605,12 +623,14 @@ public class JsFacade implements Exportable {
                 messenger.editGroupTitle(gid, newTitle).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "editGroupTitle:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "editGroupTitle:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -626,12 +646,14 @@ public class JsFacade implements Exportable {
                 messenger.createGroup(title, avatarDescriptor, uids).start(new CommandCallback<Integer>() {
                     @Override
                     public void onResult(Integer res) {
+                        Log.d(TAG, "createGroup:result");
                         resolve(JsPeer.create(Peer.group(res)));
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "createGroup:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -646,12 +668,14 @@ public class JsFacade implements Exportable {
                 messenger.inviteMember(gid, uid).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "inviteMember:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "inviteMember:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -666,12 +690,14 @@ public class JsFacade implements Exportable {
                 messenger.kickMember(gid, uid).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "kickMember:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "kickMember:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -686,12 +712,14 @@ public class JsFacade implements Exportable {
                 messenger.leaveGroup(gid).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "leaveGroup:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "leaveGroup:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -706,12 +734,14 @@ public class JsFacade implements Exportable {
                 messenger.requestIntegrationToken(gid).start(new CommandCallback<String>() {
                     @Override
                     public void onResult(String res) {
+                        Log.d(TAG, "getIntegrationToken:result");
                         resolve(res);
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "getIntegrationToken:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -726,12 +756,14 @@ public class JsFacade implements Exportable {
                 messenger.revokeIntegrationToken(gid).start(new CommandCallback<String>() {
                     @Override
                     public void onResult(String res) {
+                        Log.d(TAG, "revokeIntegrationToken:result");
                         resolve(res);
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "revokeIntegrationToken:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -746,12 +778,14 @@ public class JsFacade implements Exportable {
                 messenger.requestInviteLink(gid).start(new CommandCallback<String>() {
                     @Override
                     public void onResult(String res) {
+                        Log.d(TAG, "getInviteLink:result");
                         resolve(res);
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "getInviteLink:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -766,12 +800,14 @@ public class JsFacade implements Exportable {
                 messenger.revokeInviteLink(gid).start(new CommandCallback<String>() {
                     @Override
                     public void onResult(String res) {
+                        Log.d(TAG, "revokeInviteLink:result");
                         resolve(res);
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "revokeInviteLink:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -786,12 +822,14 @@ public class JsFacade implements Exportable {
                 messenger.addContact(uid).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "addContact:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "addContact:error");
+                        reject(e.getMessage());
                     }
                 });
             }
@@ -805,6 +843,7 @@ public class JsFacade implements Exportable {
                 messenger.findUsers(query).start(new CommandCallback<UserVM[]>() {
                     @Override
                     public void onResult(UserVM[] users) {
+                        Log.d(TAG, "findUsers:result");
                         JsArray<JsUser> jsUsers = JsArray.createArray().cast();
 
                         for (UserVM user : users) {
@@ -816,6 +855,7 @@ public class JsFacade implements Exportable {
 
                     @Override
                     public void onError(Exception e) {
+                        Log.d(TAG, "findUsers:error");
                         reject(e.getMessage());
                     }
                 });
@@ -831,12 +871,14 @@ public class JsFacade implements Exportable {
                 messenger.removeContact(uid).start(new CommandCallback<Boolean>() {
                     @Override
                     public void onResult(Boolean res) {
+                        Log.d(TAG, "removeContact:result");
                         resolve();
                     }
 
                     @Override
                     public void onError(Exception e) {
-                        reject();
+                        Log.d(TAG, "removeContact:error");
+                        reject(e.getMessage());
                     }
                 });
             }

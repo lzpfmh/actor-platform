@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
+
 import _ from 'lodash';
 
 import React from 'react';
@@ -7,10 +11,8 @@ const {addons: { PureRenderMixin }} = addons;
 
 import ActorClient from 'utils/ActorClient';
 import Inputs from 'utils/Inputs';
-import { Styles, FlatButton } from 'material-ui';
 
 import { KeyCodes } from 'constants/ActorAppConstants';
-import ActorTheme from 'constants/ActorTheme';
 
 import MessageActionCreators from 'actions/MessageActionCreators';
 import ComposeActionCreators from 'actions/ComposeActionCreators';
@@ -22,8 +24,6 @@ import ComposeStore from 'stores/ComposeStore';
 import AvatarItem from 'components/common/AvatarItem.react';
 import MentionDropdown from 'components/common/MentionDropdown.react';
 
-const ThemeManager = new Styles.ThemeManager();
-
 let getStateFromStores = () => {
   return {
     text: ComposeStore.getText(),
@@ -33,22 +33,15 @@ let getStateFromStores = () => {
   };
 };
 
-@ReactMixin.decorate(PureRenderMixin)
-class ComposeSection extends React.Component {
+@ReactMixin.decorate(PureRenderMixin) class ComposeSection extends React.Component {
   static propTypes = {
     peer: React.PropTypes.object.isRequired
-  };
-
-  static childContextTypes = {
-    muiTheme: React.PropTypes.object
   };
 
   constructor(props) {
     super(props);
 
     this.state = getStateFromStores();
-
-    ThemeManager.setTheme(ActorTheme);
 
     GroupStore.addChangeListener(this.onChange);
     ComposeStore.addChangeListener(this.onChange);
@@ -65,21 +58,18 @@ class ComposeSection extends React.Component {
     this.setState(getStateFromStores());
   };
 
-  getChildContext() {
-    return {
-      muiTheme: ThemeManager.getCurrentTheme()
-    };
-  }
-
   onMessageChange = event => {
-    let text = event.target.value;
+    const text = event.target.value;
+    const { peer } = this.props;
 
-    ComposeActionCreators.onTyping(this.props.peer, text, this.getCaretPosition());
+    ComposeActionCreators.onTyping(peer, text, this.getCaretPosition());
   };
 
   onKeyDown = event => {
-    if (this.state.mentions === null) {
-      if (this.state.sendByEnter === 'true') {
+    const { mentions, sendByEnter } = this.state;
+
+    if (mentions === null) {
+      if (sendByEnter === 'true') {
         if (event.keyCode === KeyCodes.ENTER && !event.shiftKey) {
           event.preventDefault();
           this.sendTextMessage();
@@ -94,9 +84,11 @@ class ComposeSection extends React.Component {
   };
 
   sendTextMessage = () => {
-    const text = this.state.text;
+    const { text } = this.state;
+    const { peer } = this.props;
+
     if (text) {
-      MessageActionCreators.sendTextMessage(this.props.peer, text);
+      MessageActionCreators.sendTextMessage(peer, text);
     }
     ComposeActionCreators.cleanText();
   };
@@ -138,7 +130,10 @@ class ComposeSection extends React.Component {
   };
 
   onMentionSelect = (mention) => {
-    ComposeActionCreators.insertMention(this.props.peer, this.state.text, this.getCaretPosition(), mention);
+    const { peer } = this.props;
+    const { text } = this.state;
+
+    ComposeActionCreators.insertMention(peer, text, this.getCaretPosition(), mention);
     this.refs.area.getDOMNode().focus();
   };
 
@@ -147,8 +142,8 @@ class ComposeSection extends React.Component {
   };
 
   getCaretPosition = () => {
-    let el = this.refs.area.getDOMNode();
-    let selection = Inputs.getInputSelection(el);
+    const el = this.refs.area.getDOMNode();
+    const selection = Inputs.getInputSelection(el);
     return selection.start;
   };
 
@@ -174,16 +169,17 @@ class ComposeSection extends React.Component {
                   ref="area"/>
 
         <footer className="compose__footer row">
-          <button className="button" onClick={this.onSendFileClick}>
+          <button className="button attachment" onClick={this.onSendFileClick}>
             <i className="material-icons">attachment</i> Send file
           </button>
-          <button className="button" onClick={this.onSendPhotoClick}>
+          <button className="button attachment" onClick={this.onSendPhotoClick}>
             <i className="material-icons">photo_camera</i> Send photo
           </button>
 
           <span className="col-xs"></span>
 
-          <FlatButton label="Send" onClick={this.sendTextMessage} secondary={true}/>
+          <button className="button button--lightblue" onClick={this.sendTextMessage} >Send</button>
+
         </footer>
 
         <div className="compose__hidden">

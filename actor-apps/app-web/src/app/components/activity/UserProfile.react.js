@@ -1,8 +1,15 @@
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
+
 import _ from 'lodash';
 import React from 'react';
 import ReactMixin from 'react-mixin';
 import { IntlMixin, FormattedMessage } from 'react-intl';
 import classnames from 'classnames';
+
+import ActorClient from 'utils/ActorClient';
+import confirm from 'utils/confirm'
 
 import ContactActionCreators from 'actions/ContactActionCreators';
 import DialogActionCreators from 'actions/DialogActionCreators';
@@ -11,7 +18,6 @@ import PeerStore from 'stores/PeerStore';
 import DialogStore from 'stores/DialogStore';
 
 import AvatarItem from 'components/common/AvatarItem.react';
-//import UserProfileContactInfo from 'components/activity/UserProfileContactInfo.react';
 import Fold from 'components/common/Fold.React';
 
 const getStateFromStores = (userId) => {
@@ -51,7 +57,12 @@ class UserProfile extends React.Component {
   };
 
   removeFromContacts =() => {
-    ContactActionCreators.removeContact(this.props.user.id);
+    const { user } = this.props;
+    const confirmText = 'You really want to remove ' + user.name + ' from your contacts?';
+
+    confirm(confirmText).then(
+      () => ContactActionCreators.removeContact(user.id)
+    );
   };
 
   onNotificationChange = (event) => {
@@ -63,7 +74,7 @@ class UserProfile extends React.Component {
   };
 
   toggleActionsDropdown = () => {
-    const isActionsDropdownOpen = this.state.isActionsDropdownOpen;
+    const { isActionsDropdownOpen } = this.state;
 
     if (!isActionsDropdownOpen) {
       this.setState({isActionsDropdownOpen: true});
@@ -78,9 +89,28 @@ class UserProfile extends React.Component {
     document.removeEventListener('click', this.closeActionsDropdown, false);
   };
 
+  clearChat = (uid) => {
+    confirm('Do you really want to delete this conversation?').then(
+      () => {
+        const peer = ActorClient.getUserPeer(uid);
+        DialogActionCreators.clearChat(peer);
+      }
+    );
+  };
+
+  deleteChat = (uid) => {
+    confirm('Do you really want to delete this conversation?').then(
+      () => {
+        const peer = ActorClient.getUserPeer(uid);
+        DialogActionCreators.deleteChat(peer);
+      }
+    );
+  };
+
+
   render() {
     const { user } = this.props;
-    const { isNotificationsEnabled } = this.state;
+    const { isNotificationsEnabled, isActionsDropdownOpen } = this.state;
 
     let actions;
     if (user.isContact === false) {
@@ -98,7 +128,7 @@ class UserProfile extends React.Component {
     }
 
     let dropdownClassNames = classnames('dropdown pull-left', {
-      'dropdown--opened': this.state.isActionsDropdownOpen
+      'dropdown--opened': isActionsDropdownOpen
     });
 
     const nickname = user.nick ? (
@@ -134,12 +164,18 @@ class UserProfile extends React.Component {
 
             <footer>
               <div className={dropdownClassNames}>
-                <button className="dropdown__button button button--light-blue" onClick={this.toggleActionsDropdown}>
+                <button className="dropdown__button button button--flat" onClick={this.toggleActionsDropdown}>
                   <i className="material-icons">more_horiz</i>
                   <FormattedMessage message={this.getIntlMessage('actions')}/>
                 </button>
                 <ul className="dropdown__menu dropdown__menu--left">
                   {actions}
+                  <li className="dropdown__menu__item dropdown__menu__item--light" onClick={() => this.clearChat(user.id)}>
+                    <FormattedMessage message={this.getIntlMessage('clearConversation')}/>
+                  </li>
+                  <li className="dropdown__menu__item dropdown__menu__item--light" onClick={() => this.deleteChat(user.id)}>
+                    <FormattedMessage message={this.getIntlMessage('deleteConversation')}/>
+                  </li>
                 </ul>
               </div>
             </footer>
