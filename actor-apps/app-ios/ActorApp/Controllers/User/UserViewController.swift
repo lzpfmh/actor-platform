@@ -4,247 +4,230 @@
 
 import UIKit
 
-class UserViewController: AATableViewController {
+class UserViewController: ACContentTableController {
     
-    private let UserInfoCellIdentifier = "UserInfoCellIdentifier"
-    private let TitledCellIdentifier = "TitledCellIdentifier"
-    
-    let uid: Int
-    var user: ACUserVM?
-    var phones: JavaUtilArrayList?
-    var binder = Binder()
-    
-    var tableData: UATableData!
-    
+    var headerRow: ACAvatarRow!
+    var isContactRow: ACCommonRow!
+
     init(uid: Int) {
+        super.init(style: ACContentTableStyle.SettingsPlain)
+
         self.uid = uid
-        super.init(style: UITableViewStyle.Plain)
+        self.autoTrack = true
+        
+        self.title = localized("ProfileTitle")
     }
     
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // MARK: -
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
+    override func tableDidLoad() {
         
-        user = Actor.getUserWithUid(jint(uid))
-        
-        self.edgesForExtendedLayout = UIRectEdge.Top
-        self.automaticallyAdjustsScrollViewInsets = false
-        
-        tableView.separatorStyle = UITableViewCellSeparatorStyle.None
-        tableView.backgroundColor = MainAppTheme.list.backyardColor
-        tableView.clipsToBounds = false
-        tableView.tableFooterView = UIView()
-        
-        tableData = UATableData(tableView: tableView)
-        tableData.registerClass(UserPhotoCell.self, forCellReuseIdentifier: UserInfoCellIdentifier)
-        tableData.registerClass(TitledCell.self, forCellReuseIdentifier: TitledCellIdentifier)
-        tableData.tableScrollClosure = { (tableView: UITableView) -> () in
-            self.applyScrollUi(tableView)
-        }
-        
-        // Avatar
-        tableData.addSection().addCustomCell { (tableView, indexPath) -> UITableViewCell in
-            let cell: UserPhotoCell = tableView.dequeueReusableCellWithIdentifier(self.UserInfoCellIdentifier, forIndexPath: indexPath) as! UserPhotoCell
-            cell.contentView.superview?.clipsToBounds = false
-            
-            if self.user != nil {
-                cell.setUsername(self.user!.getNameModel().get())
+        // Profile
+        section { (s) -> () in
+
+            // Profile: Avatar
+            self.headerRow = s.avatar { (r) -> () in
+                
+                r.bindAction = { (r) -> () in
+                    r.id = self.uid
+                    r.title = self.user.getNameModel().get()
+                    r.avatar = self.user.getAvatarModel().get()
+                    
+                    let presence = self.user.getPresenceModel().get()
+                    let presenceText = Actor.getFormatter().formatPresence(presence, withSex: self.user.getSex())
+                    
+                    if !self.isBot {
+                        r.subtitle = presenceText
+                        if presence!.state.ordinal() == jint(ACUserPresence_State.ONLINE.rawValue) {
+                            r.subtitleStyle = "user.online"
+                        } else {
+                            r.subtitleStyle = "user.offline"
+                        }
+                    } else {
+                        r.subtitleStyle = "user.online"
+                        r.subtitle = "bot"
+                    }
+                    
+                }
+                
+                r.avatarDidTap = { [unowned self] (view: UIView) -> () in
+                    let avatar = self.user.getAvatarModel().get()
+                    if avatar != nil && avatar.fullImage != nil {
+                        
+                        let full = avatar.fullImage.fileReference
+                        let small = avatar.smallImage.fileReference
+                        let size = CGSize(width: Int(avatar.fullImage.width), height: Int(avatar.fullImage.height))
+                        
+                        self.presentViewController(PhotoPreviewController(file: full, previewFile: small, size: size, fromView: view), animated: true, completion: nil)
+                    }
+                }
             }
             
-            self.applyScrollUi(tableView, cell: cell)
-            
-            return cell
-        }.setHeight(avatarHeight)
-        
-        // Top section
-        let contactsSection = tableData
-            .addSection(true)
-            .setFooterHeight(15)
-        
-        // Send Message
-        if (!user!.isBot().boolValue) {
-            contactsSection
-                .addActionCell("ProfileSendMessage", actionClosure: { () -> () in
+            // Profile: Send messages
+            s.action("ProfileSendMessage") { (r) -> () in
+                r.selectAction = { () -> Bool in
                     self.navigateDetail(ConversationViewController(peer: ACPeer.userWithInt(jint(self.uid))))
                     self.popover?.dismissPopoverAnimated(true)
-                })
-        }
-        
-        let nick = user!.getNickModel().get()
-        if nick != nil {
-            contactsSection
-                .addTitledCell(localized("ProfileUsername"), text: "@\(nick)")
-        }
-        
-        let about = user!.getAboutModel().get()
-        if about != nil {
-            contactsSection
-                .addTextCell(localized("ProfileAbout"), text: about)
-        }
-        
-        // Phones
-        contactsSection
-            .addCustomCells(55, countClosure: { () -> Int in
-                if (self.phones != nil) {
-                    return Int(self.phones!.size())
+                    return false
                 }
-                return 0
-                }) { (tableView, index, indexPath) -> UITableViewCell in
-                    let cell: TitledCell = tableView.dequeueReusableCellWithIdentifier(self.TitledCellIdentifier, forIndexPath: indexPath) as! TitledCell
-                    if let phone = self.phones!.getWithInt(jint(index)) as? ACUserPhone {
-                        cell.setTitle(phone.getTitle(), content: "+\(phone.getPhone())")
+            }
+        }
+        
+        let nick = self.user.getNickModel().get()
+        let about = self.user.getAboutModel().get()
+        
+        if !self.isBot || nick != nil || about != nil {
+
+            // Contact
+            section { (s) -> () in
+                
+                // Contact: Nickname
+                if let n = nick {
+                    s.titled("ProfileUsername", content: "@\(n)")
+                }
+                
+                // Contact: Phones
+                s.arrays { (r: ACManagedArrayRows<ACUserPhone, TitledCell>) -> () in
+                    r.height = 55
+                    r.data = self.user.getPhonesModel().get().toSwiftArray()
+                    r.bindData = { (c: TitledCell, d: ACUserPhone) -> () in
+                        c.setTitle(d.title, content: "+\(d.phone)")
                     }
-                    return cell
-            }.setAction { (index) -> () in
-                let phoneNumber = (self.phones?.getWithInt(jint(index)).getPhone())!
-                let hasPhone = UIApplication.sharedApplication().canOpenURL(NSURL(string: "tel://")!)
-                if (!hasPhone) {
-                    UIPasteboard.generalPasteboard().string = "+\(phoneNumber)"
-                    self.alertUser("NumberCopied")
-                } else {
-                    self.showActionSheet(["CallNumber", "CopyNumber"],
-                        cancelButton: "AlertCancel",
-                        destructButton: nil,
-                        sourceView: self.view,
-                        sourceRect: self.view.bounds,
-                        tapClosure: { (index) -> () in
-                            if (index == 0) {
-                                UIApplication.sharedApplication().openURL(NSURL(string: "tel://+\(phoneNumber)")!)
-                            } else if index == 1 {
-                                UIPasteboard.generalPasteboard().string = "+\(phoneNumber)"
-                                self.alertUser("NumberCopied")
-                            }
-                    })
+                    r.bindCopy = { (d: ACUserPhone) -> String? in
+                        return "+\(d.phone)"
+                    }
+                    r.selectAction = { (c: ACUserPhone) -> Bool in
+                        let phoneNumber = c.phone
+                        let hasPhone = UIApplication.sharedApplication().canOpenURL(NSURL(string: "telprompt://")!)
+                        if (!hasPhone) {
+                            UIPasteboard.generalPasteboard().string = "+\(phoneNumber)"
+                            self.alertUser("NumberCopied")
+                        } else {
+                            UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(phoneNumber)")!)
+                        }
+                        return true
+                    }
                 }
+                
+                // Contact: About
+                if let a = about {
+                    s.text("ProfileAbout", content: a)
+                }
+            }
         }
         
-        tableData.addSection()
-            .setHeaderHeight(15)
-            .setFooterHeight(15)
-            .addCommonCell { (cell) -> () in
+        section { (s) -> () in
+            s.common { (r) -> () in
                 let peer = ACPeer.userWithInt(jint(self.uid))
-                cell.setSwitcherOn(Actor.isNotificationsEnabledWithPeer(peer))
-                cell.switchBlock = { (on: Bool) -> () in
-                    if !on && !self.user!.isBot().boolValue {
+                r.style = .Switch
+                r.content = localized("ProfileNotifications")
+                
+                r.bindAction = { (r) -> () in
+                    r.switchOn = Actor.isNotificationsEnabledWithPeer(peer)
+                }
+                
+                r.switchAction = { (on: Bool) -> () in
+                    if !on && !self.user.isBot().boolValue {
                         self.confirmAlertUser("ProfileNotificationsWarring",
                             action: "ProfileNotificationsWarringAction",
                             tapYes: { () -> () in
                                 Actor.changeNotificationsEnabledWithPeer(peer, withValue: false)
                             }, tapNo: { () -> () in
-                                cell.setSwitcherOn(true, animated: true)
-                            })
+                                r.reload()
+                        })
                         return
                     }
                     Actor.changeNotificationsEnabledWithPeer(peer, withValue: on)
                 }
             }
-            .setContent("ProfileNotifications")
-            .setStyle(.Switch)
+        }
         
-        let contactSection = tableData.addSection(true)
-            .setHeaderHeight(15)
-            .setFooterHeight(15)
+        
+        // Edit contact
+        section { (s) -> () in
+                
+            // Edit contact: Add/Remove
+            self.isContactRow = s.common { (r) -> () in
+                r.bindAction = { (r) -> () in
+                    if self.user.isContactModel().get().booleanValue() {
+                        r.content = localized("ProfileRemoveFromContacts")
+                        r.style = .Destructive
+                    } else {
+                        r.content = localized("ProfileAddToContacts")
+                        r.style = .Action
+                    }
+                }
+                r.selectAction = { () -> Bool in
+                    if (self.user.isContactModel().get().booleanValue()) {
+                        self.execute(Actor.removeContactCommandWithUid(jint(self.uid)))
+                    } else {
+                        self.execute(Actor.addContactCommandWithUid(jint(self.uid)))
+                    }
+                    return true
+                }
+            }
+            
+            if !self.isBot {
+                
+                // Edit contact: Renaming
+                s.action("ProfileRename") { (r) -> () in
+                    r.selectAction = { () -> Bool in
+                        
+                        func renameUser() {
+                            self.startEditField { (c) -> () in
+                                
+                                c.title = "ProfileEditHeader"
+                                c.initialText = self.user.getNameModel().get()
+                                
+                                c.didDoneTap = { (d, c) in
+                                    if d.length == 0 {
+                                        return
+                                    }
+                                    
+                                    c.executeSafeOnlySuccess(Actor.editNameCommandWithUid(jint(self.uid), withName: d), successBlock: { (val) -> Void in
+                                        c.dismiss()
+                                    })
+                                }
+                            }
+                        }
+                        
+                        if (!Actor.isRenameHintShown()) {
+                            self.confirmAlertUser("ProfileRenameMessage",
+                                action: "ProfileRenameAction",
+                                tapYes: { () -> () in
+                                    renameUser()
+                            })
+                        } else {
+                            renameUser()
+                        }
+                        return true
+                    }
+                }
+            }
 
-       contactSection
-            .addCommonCell { (cell) -> () in
-                if (self.user!.isContactModel().get().booleanValue()) {
-                    cell.setContent(NSLocalizedString("ProfileRemoveFromContacts", comment: "Remove From Contacts"))
-                    cell.style = .Destructive
-                } else {
-                    cell.setContent(NSLocalizedString("ProfileAddToContacts", comment: "Add To Contacts"))
-                    cell.style = .Blue
-                }
-            }
-            .setAction { () -> () in
-                if (self.user!.isContactModel().get().booleanValue()) {
-                    self.execute(Actor.removeContactCommandWithUid(jint(self.uid)))
-                } else {
-                    self.execute(Actor.addContactCommandWithUid(jint(self.uid)))
-                }
-            }
+        }
         
-        // Rename
-        contactSection
-            .addActionCell("ProfileRename", actionClosure: { () -> () in
-                if (!Actor.isRenameHintShown()) {
-                    self.confirmAlertUser("ProfileRenameMessage",
-                        action: "ProfileRenameAction",
-                        tapYes: { () -> () in
-                            self.renameUser()
-                        })
-                } else {
-                    self.renameUser()
-                }
+    }
+    
+    override func tableWillBind(binder: Binder) {
+        binder.bind(user.getAvatarModel(), closure: { (value: ACAvatar?) -> () in
+            self.headerRow.reload()
+        })
+        
+        binder.bind(user.getNameModel(), closure: { ( name: String?) -> () in
+            self.headerRow.reload()
+        })
+        
+        if !isBot {
+            binder.bind(user.getPresenceModel(), closure: { (presence: ACUserPresence?) -> () in
+                self.headerRow.reload()
             })
-        
-        // Binding data
-        tableView.reloadData()
-        
-        binder.bind(user!.getAvatarModel(), closure: { (value: ACAvatar?) -> () in
-            if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                cell.userAvatarView.bind(self.user!.getNameModel().get(), id: jint(self.uid), avatar: value)
-            }
-        })
-
-        binder.bind(user!.getNameModel(), closure: { ( name: String?) -> () in
-            if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                cell.setUsername(name!)
-            }
-            self.title = name!
-        })
-
-        binder.bind(user!.getPresenceModel(), closure: { (presence: ACUserPresence?) -> () in
-            let presenceText = Actor.getFormatter().formatPresence(presence, withSex: self.user!.getSex())
-            if presenceText != nil {
-                if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                    cell.setPresence(presenceText)
-                }
-            }
-        })
-        
-        binder.bind(user!.getPhonesModel(), closure: { (phones: JavaUtilArrayList?) -> () in
-            if phones != nil {
-                self.phones = phones
-                self.tableView.reloadData()
-            }
-        })
-        
-        binder.bind(user!.isContactModel(), closure: { (contect: ARValueModel?) -> () in
-            self.tableView.reloadSections(NSIndexSet(index: contactSection.index), withRowAnimation: UITableViewRowAnimation.None)
-        })
-    }
-    
-    override func viewWillAppear(animated: Bool) {
-        super.viewWillAppear(animated)
-        
-        applyScrollUi(tableView)
-        navigationController?.navigationBar.shadowImage = UIImage()
-        Actor.onProfileOpenWithUid(jint(uid))
-    }
-    
-    override func viewDidDisappear(animated: Bool) {
-        super.viewDidDisappear(animated)
-        Actor.onProfileClosedWithUid(jint(uid))
-    }
-    
-    override func viewWillDisappear(animated: Bool) {
-        super.viewWillDisappear(animated)
-        navigationController?.navigationBar.lt_reset()
-    }
-    
-    func renameUser() {
-        textInputAlert("ProfileEditHeader",
-            content: self.user!.getNameModel().get(),
-            action: "AlertSave",
-            tapYes: { (nval) -> () in
-                if nval.length > 0 {
-                    self.execute(Actor.editNameCommandWithUid(jint(self.uid), withName: nval))
-                }
-        })
+            
+            binder.bind(user.isContactModel(), closure: { (contect: ARValueModel?) -> () in
+                self.isContactRow.reload()
+            })
+        }
     }
 }

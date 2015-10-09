@@ -4,58 +4,51 @@
 
 import UIKit
 
-class DialogsSearchCell: CommonCell {
+class DialogsSearchCell: UATableViewCell, ACBindedSearchCell {
     
-    // MARK: -
-    // MARK: Private vars
+    typealias BindData = ACSearchEntity
     
-    private let avatarView: AvatarView = AvatarView(frameSize: 48, type: .Rounded);
-    private let titleView: UILabel = UILabel();
-    private let separatorView = TableViewSeparator(color: MainAppTheme.list.separatorColor);
+    static func bindedCellHeight(item: BindData) -> CGFloat {
+        
+        return 76
+    }
     
-    private var bindedFile: jlong? = nil;
-    private var avatarCallback: CocoaDownloadCallback? = nil;
+    private let avatarView: AvatarView = AvatarView(frameSize: 48, type: .Rounded)
+    private let titleView: UILabel = UILabel()
     
-    // MARK: -
-    // MARK: Constructors
-    
-    init(reuseIdentifier:String) {
+    override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
+        
         super.init(style: UITableViewCellStyle.Default, reuseIdentifier: reuseIdentifier)
         
-        titleView.font = UIFont(name: "Roboto-Medium", size: 19);
+        titleView.font = UIFont.mediumSystemFontOfSize(19)
         titleView.textColor = MainAppTheme.list.textColor
         
         contentView.addSubview(avatarView)
         contentView.addSubview(titleView)
-        contentView.addSubview(separatorView)
     }
     
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // MARK: -
-    // MARK: Methods
-    
-    func bindSearchEntity(searchEntity: ACSearchEntity, isLast: Bool) {
-        avatarView.bind(searchEntity.getTitle(), id: searchEntity.getPeer().getPeerId(), avatar: searchEntity.getAvatar());
-        titleView.text = searchEntity.getTitle();
-        self.separatorView.hidden = isLast;
+    func bind(item: ACSearchEntity, search: String?) {
+        avatarView.bind(item.title, id: item.peer.peerId, avatar: item.avatar)
+        titleView.text = item.title
     }
     
-    // MARK: -
-    // MARK: Layout
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        avatarView.unbind()
+    }
     
     override func layoutSubviews() {
-        super.layoutSubviews();
+        super.layoutSubviews()
         
-        let width = self.contentView.frame.width;
-        let leftPadding = CGFloat(76);
-        let padding = CGFloat(14);
+        let width = self.contentView.frame.width
+        let leftPadding = CGFloat(76)
+        let padding = CGFloat(14)
         
-        avatarView.frame = CGRectMake(padding, padding, 48, 48);
-        titleView.frame = CGRectMake(leftPadding, 0, width - leftPadding - (padding + 50), contentView.bounds.size.height);
-        separatorView.frame = CGRectMake(leftPadding, 75.5, width, 0.5);
+        avatarView.frame = CGRectMake(padding, padding, 48, 48)
+        titleView.frame = CGRectMake(leftPadding, 0, width - leftPadding - (padding + 50), contentView.bounds.size.height)
     }
-
 }

@@ -1,5 +1,7 @@
 package im.actor.server.api.rpc.service.sequence
 
+import im.actor.server.office.EntityNotFound
+
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Success
@@ -18,7 +20,7 @@ import im.actor.server.group.{ GroupViewRegion, GroupExtension, GroupOffice }
 import im.actor.server.models
 import im.actor.server.sequence.{ SeqUpdatesExtension, SeqUpdatesManager }
 import im.actor.server.session._
-import im.actor.server.user.{ UserViewRegion, UserExtension, UserOffice }
+import im.actor.server.user.{ UserUtils, UserViewRegion, UserExtension, UserOffice }
 
 final class SequenceServiceImpl(config: SequenceServiceConfig)(
   implicit
@@ -30,12 +32,9 @@ final class SequenceServiceImpl(config: SequenceServiceConfig)(
   import SeqUpdatesManager._
 
   protected override implicit val ec: ExecutionContext = actorSystem.dispatcher
-  private implicit val timeout: Timeout = Timeout(30.seconds)
 
-  private implicit val db: Database = DbExtension(actorSystem).db
+  private val db: Database = DbExtension(actorSystem).db
   private implicit val seqUpdExt: SeqUpdatesExtension = SeqUpdatesExtension(actorSystem)
-  private implicit val userViewRegion: UserViewRegion = UserExtension(actorSystem).viewRegion
-  private implicit val groupViewRegion: GroupViewRegion = GroupExtension(actorSystem).viewRegion
 
   private val maxDifferenceSize: Long = config.maxDifferenceSize
 
@@ -133,10 +132,10 @@ final class SequenceServiceImpl(config: SequenceServiceConfig)(
 
   private def getUsersGroups(userIds: Set[Int], groupIds: Set[Int])(implicit client: AuthorizedClientData) = {
     DBIO.from(for {
-      groups ← Future.sequence(groupIds map (GroupOffice.getApiStruct(_, client.userId)))
+      groups ← Future.sequence(groupIds map (GroupExtension(actorSystem).getApiStruct(_, client.userId)))
       // TODO: #perf optimize collection operations
       allUserIds = userIds ++ groups.foldLeft(Set.empty[Int]) { (ids, g) ⇒ ids ++ g.members.map(m ⇒ Seq(m.userId, m.inviterUserId)).flatten + g.creatorUserId }
-      users ← Future.sequence(allUserIds map (UserOffice.getApiStruct(_, client.userId, client.authId)))
+      users ← Future.sequence(allUserIds map (UserUtils.safeGetUser(_, client.userId, client.authId))) map (_.flatten)
     } yield (users, groups))
   }
 }

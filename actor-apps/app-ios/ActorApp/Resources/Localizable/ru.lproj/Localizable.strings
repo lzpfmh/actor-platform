@@ -40,11 +40,19 @@
 
 "SettingsSetPhoto" = "Поставить новое фото";
 
+
 "SettingsChangeName" = "Поменять имя";
+
+"SettingsEditHeader" = "Ваше имя";
+
+"SettingsEditHint" = "Пожалуйста, укажите ваше реально имя что бы люди лучше понимали кто вы.";
+
+"SettingsEditFieldHint" = "Введите ваше имя";
+
 
 "SettingsSecurity" = "Безопасность";
 
-"SettingsEditHeader" = "Измените свое имя";
+"SettingsWallpapers" = "Обои чата";
 
 "SettingsUsernameTitle" = "Измените свой ник";
 
@@ -54,11 +62,23 @@
 
 "SettingsUsernameNotSet" = "Указать ник";
 
+"SettingsUsernameTitle" = "Ник";
+
+"SettingsUsernameHintField" = "Введите свой ник";
+
+"SettingsUsernameHint" = "Вы можете выбрать ник в Акторе. Если вы это сделаете, то другие люди смогут найти вас без номера телефона.\n\nВы можете использовать латинские буквы, цифры и подчеркивание. Минимальная длинна - 5 символов.";
+
 "SettingsChangeAboutTitle" = "О Себе";
+
+"SettingsChangeAboutHint" = "Рассажите что-нибудь о себе людям";
 
 "SettingsAskQuestion" = "Задать вопрос";
 
 "SettingsAbout" = "О Программе";
+
+"SettingsTwitter" = "Twitter";
+
+"SettingsAbout" = "Домашняя страница";
 
 "SettingsVersion" = "Версия {version}";
 
@@ -72,7 +92,7 @@
 
 "ProfileNotifications" = "Оповещения";
 
-"ProfileNotificationsWarring" = "Вы уверены, что хотите отключить выключить от этого человека? Это может привести к проблемам в отношениях с ним.";
+"ProfileNotificationsWarring" = "Вы уверены, что хотите отключить оповещения от этого человека? Это может привести к проблемам в отношениях с ним.";
 
 "ProfileNotificationsWarringAction" = "Выключить";
 
@@ -92,6 +112,8 @@
 
 "ProfileUsername" = "ник";
 
+"ProfileTitle" = "Информация";
+
 "CallNumber" = "Позвонить";
 
 "ShareNumber" = "Переслать номер";
@@ -110,7 +132,9 @@
  * Group
  */
 
-"GroupEditHeader" = "Измените тему группы";
+"GroupEditHeader" = "Тема";
+
+"GroupEditHint" = "Введите тему группы";
 
 "GroupSetPhoto" = "Поменять фото группы";
 
@@ -128,13 +152,21 @@
 
 "GroupMembers" = "{0} УЧАСТНИКИ";
 
+"GroupMemberAdmin" = "админ.";
+
 "GroupMemberInfo" = "Профиль";
+
+"GroupMemberMakeAdmin" = "Сделать админ. группы";
+
+"GroupMemberMakeMessage" = "Вы уверены, что хотите сделать {name} администратором группы?";
+
+"GroupMemberMakeAction" = "Да";
 
 "GroupMemberKick" = "Исключить из группы";
 
 "GroupMemberKickMessage" = "Вы уверены, что хотите исключить {name} из группы?";
 
-"GroupMemberKickAction" = "Исключить из группы";
+"GroupMemberKickAction" = "Исключить";
 
 "GroupMemberWrite" = "Написать";
 
@@ -152,7 +184,7 @@
 
 "GroupLeaveConfirm" = "Вы уверены, что хотите покинуть группу?";
 
-"GroupLeaveConfirmAction" = "Покинуть группу";
+"GroupLeaveConfirmAction" = "Покинуть";
 
 "GroupInviteLinkPageTitle" = "Приглашение";
 
@@ -179,6 +211,8 @@
 "GroupJoinMessage" = "Вы уверены, что хотите вступить в группу?";
 
 "GroupJoinAction" = "Вступить";
+
+"GroupMembers" = "УЧАСТНИКИ";
 
 /*
  * Compose
@@ -238,11 +272,23 @@
  * Privacy
  */
 
-"PrivacyTitle" = "Приватность и безопасность";
+"SecurityTitle" = "Безопасность";
 
 "PrivacyTerminate" = "Удалить все другие сессии";
 
+"PrivacyTerminateAlert" = "Удалить другие сессии";
+
+"PrivacyTerminateAlertSingle" = "Удалить сессию";
+
 "PrivacyTerminateHint" = "Выход со всех устройств кроме этого.";
+
+/*
+ * Wallpapers
+ */
+
+"WallpapersTitle" = "Обои чата";
+
+"WallpapersPhoto" = "Медиа библеотека";
 
 /*
  * Chat
@@ -253,6 +299,18 @@
 "ChatSend" = "Отпр.";
 
 "ChatNoGroupAccess" = "Вы не состоите в группе";
+
+/*
+ * Find
+ */
+
+"FindTitle" = "Поиск Людей";
+
+"FindFieldHint" = "телефон, адрес почты или ник";
+
+"FindHint" = "Для поиска введите номер телефона, адрес электронной почты или ник";
+
+"FindNotFound" = "К сожалению, мы не смогли никого найти по этому поисковому запросу";
 
 /*
  * Placeholders
@@ -304,6 +362,12 @@
 
 "AuthCodeHint" = "Мы отправили Вам SMS с кодом активации.";
 
+"AuthCallDoneHint" = "Актор набрал ваш номер.";
+
+"AuthCallHint" = "Актор позвонит вам через {time}";
+
+"AuthNoCodeHint" = "Не получили код?";
+
 "AuthProfileTitle" = "Ваш профиль";
 
 "AuthProfileAddPhoto1" = "добавить";
@@ -320,7 +384,7 @@
 
 "CurrentLocale" = "Ru";
 
-"InviteText" = "Привет! Давай продолжим наше общение в Акторе https://actor.im/dl";
+"InviteText" = "Привет! Давай продолжим наше общение в Акторе {link}";
 
 "PhotoRemove" = "Удалить фото";
 
@@ -344,17 +408,27 @@
 
 "NavigationSave" = "Сохранить";
 
+"NavigationFind" = "Найти";
+
 "AlertCancel" = "Отмена";
 
 "AlertNext" = "Далее";
 
 "AlertSave" = "Сохранить";
 
+"AlertSet" = "Установить";
+
 "AlertOk" = "OK";
 
 "AlertYes" = "Да";
 
 "AlertNo" = "Нет";
+
+"AlertError" = "Ошибка";
+
+"AlertTryAgain" = "Повторить";
+
+"AlertInvite" = "Пригласить";
 
 "UnsupportedContent" = "Сообщение не поддерживается в этой версии. Пожалуйста, подождите обновление приложения что бы увидеть его.";
 

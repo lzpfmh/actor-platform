@@ -4,10 +4,11 @@ import sbt.Keys._
 import sbt._
 import spray.revolver.RevolverPlugin._
 import com.trueaccord.scalapb.{ScalaPbPlugin => PB}
+import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport.Docker
 
-object Build extends sbt.Build {
-  val Version = "1.0.2038"
+object Build extends sbt.Build with Versioning with Releasing with Publishing {
   val ScalaVersion = "2.11.7"
+  val Version = getVersion
 
   lazy val buildSettings =
     Defaults.coreDefaultSettings ++
@@ -29,6 +30,7 @@ object Build extends sbt.Build {
     "-Ybackend:GenBCode",
     "-Ydelambdafy:method",
     "-Yopt:l:classpath",
+    //"-Ymacro-debug-lite",
     "-encoding", "UTF-8",
     "-deprecation",
     "-unchecked",
@@ -46,8 +48,7 @@ object Build extends sbt.Build {
       libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % "0.5.9" % PB.protobufConfig,
       PB.includePaths in PB.protobufConfig ++= Seq(
         file("actor-runtime/src/main/protobuf"),
-        file("actor-core/src/main/protobuf"),
-        file("shardakka/src/main/protobuf")
+        file("actor-core/src/main/protobuf")
       ),
       PB.runProtoc in PB.protobufConfig := (args =>
         com.github.os72.protocjar.Protoc.runProtoc("-v300" +: args.toArray))
@@ -67,14 +68,14 @@ object Build extends sbt.Build {
 
 
   lazy val root = Project(
-    "actor-server",
+    "actor",
     file("."),
     settings =
-      defaultSettings ++
+      defaultSettings ++ releaseSettings ++
         Revolver.settings ++
         Seq(
           libraryDependencies ++= Dependencies.root,
-          Revolver.reStartArgs := Seq("im.actor.server.Main"),
+          //Revolver.reStartArgs := Seq("im.actor.server.Main"),
           mainClass in Revolver.reStart := Some("im.actor.server.Main"),
           mainClass in Compile := Some("im.actor.server.Main"),
           autoCompilerPlugins := true,
@@ -89,6 +90,9 @@ object Build extends sbt.Build {
     .aggregate(
       //      actorDashboard,
       actorCore,
+      actorBots,
+      actorBotsShared,
+      actorBotkit,
       actorEmail,
       actorEnrich,
       actorFrontend,
@@ -100,9 +104,12 @@ object Build extends sbt.Build {
       actorSession,
       actorRpcApi,
       actorTests,
-      actorRuntime,
-      shardakka
+      actorRuntime
     )
+    .settings(
+    aggregate in Docker := false,
+    aggregate in Revolver.reStart := false
+  )
 
   lazy val actorRunner = Project(
     id = "actor-runner",
@@ -110,6 +117,7 @@ object Build extends sbt.Build {
     settings = defaultSettings
   ).dependsOn(
     actorActivation,
+    actorBots,
     actorEnrich,
     actorEmail,
     actorFrontend,
@@ -129,13 +137,42 @@ object Build extends sbt.Build {
       )
   ).dependsOn(actorEmail, actorSms, actorPersist)
 
+  lazy val actorBots = Project(
+    id = "actor-bots",
+    base = file("actor-bots"),
+    settings = defaultSettings ++
+      Seq(libraryDependencies ++= Dependencies.bots)
+  )
+    .dependsOn(actorBotkit, actorCore, actorTestkit % "test")
+
+  lazy val actorBotsShared = Project(
+    id = "actor-bots-shared",
+    base = file("actor-bots-shared"),
+    settings = defaultSettings ++ publishSettings ++ Seq(
+      libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _),
+      libraryDependencies ++= Dependencies.botShared,
+      addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
+    )
+  )
+
+  lazy val actorBotkit = Project(
+    id = "actor-botkit",
+    base = file("actor-botkit"),
+    settings = defaultSettings ++ publishSettings ++ Revolver.settings ++ Seq(
+      libraryDependencies ++= Dependencies.botkit,
+      addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
+    )
+  )
+    .dependsOn(actorBotsShared)
+    .aggregate(actorBotsShared)
+
   lazy val actorCore = Project(
     id = "actor-core",
     base = file("actor-core"),
     settings = defaultSettings ++ SbtActorApi.settings ++ Seq(
       libraryDependencies ++= Dependencies.core
     )
-  ).dependsOn(actorCodecs, actorModels, actorPersist, actorPresences, actorSocial, actorRuntime, shardakka)
+  ).dependsOn(actorCodecs, actorModels, actorPersist, actorPresences, actorSocial, actorRuntime)
 
   lazy val actorEmail = Project(
     id = "actor-email",
@@ -160,7 +197,7 @@ object Build extends sbt.Build {
     settings = defaultSettings ++ Seq(
       libraryDependencies ++= Dependencies.httpApi
     )
-  ).dependsOn(actorCore, actorPersist, actorRuntime)
+  ).dependsOn(actorBots, actorCore, actorPersist, actorRuntime)
 
   lazy val actorOAuth = Project(
     id = "actor-oauth",
@@ -201,7 +238,6 @@ object Build extends sbt.Build {
     actorActivation,
     actorCodecs,
     actorCore,
-    actorHttpApi, // FIXME: remove this dependency
     actorOAuth,
     actorPersist,
     actorPresences,
@@ -320,16 +356,6 @@ object Build extends sbt.Build {
       actorOAuth,
       actorPersist,
       actorRpcApi,
-      actorSession,
-      shardakka
+      actorSession
     )
-
-  lazy val shardakka = Project(
-    id = "shardakka",
-    base = file("shardakka"),
-    settings = defaultSettings ++ Seq(
-      libraryDependencies ++= Dependencies.shardakka
-    )
-  ).dependsOn(actorRuntime)
-
 }

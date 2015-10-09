@@ -4,6 +4,42 @@
 
 import Foundation
 
+private var targetReference = "target"
+extension UITapGestureRecognizer {
+    convenience init(closure: ()->()){
+        let target = ClosureTarget(closure: closure)
+        self.init(target: target, action: "invoke")
+        setAssociatedObject(self, value: target, associativeKey: &targetReference)
+    }
+}
+
+extension UIView {
+    var viewDidTap: (()->())? {
+        set (value) {
+            if value != nil {
+                self.addGestureRecognizer(UITapGestureRecognizer(closure: value!))
+                self.userInteractionEnabled = true
+            }
+        }
+        get {
+            return nil
+        }
+    }
+}
+
+private class ClosureTarget {
+    
+    private let closure: ()->()
+    
+    init(closure: ()->()) {
+        self.closure = closure
+    }
+    
+    @objc func invoke() {
+        closure()
+    }
+}
+
 extension UIView {
     func hideView() {
         UIView.animateWithDuration(0.2, animations: { () -> Void in
@@ -16,6 +52,43 @@ extension UIView {
             self.alpha = 1
         })
     }
+    
+    var height: CGFloat {
+        get {
+            return self.bounds.height
+        }
+    }
+    
+    var width: CGFloat {
+        get {
+            return self.bounds.width
+        }
+    }
+    
+    var left: CGFloat {
+        get {
+            return self.frame.minX
+        }
+    }
+    
+    var right: CGFloat {
+        get {
+            return self.frame.maxX
+        }
+    }
+
+    var top: CGFloat {
+        get {
+            return self.frame.minY
+        }
+    }
+    
+    var bottom: CGFloat {
+        get {
+            return self.frame.maxY
+        }
+    }
+    
 }
 
 class UIViewMeasure {
@@ -47,5 +120,42 @@ class UIViewMeasure {
         
         // Returning size with expanded width and height
         return CGSizeMake(ceil(rect.width + 2), CGFloat(ceil(rect.height)))
+    }
+}
+
+private var registeredCells = "cells!"
+
+extension UITableView {
+    private func cellTypeForClass(cellClass: AnyClass) -> String {
+        
+        let cellReuseId = "\(cellClass)"
+        var registered: ([String])! = getAssociatedObject(self, associativeKey: &registeredCells)
+        var found = false
+        if registered != nil {
+            if registered.contains(cellReuseId) {
+                found = true
+            } else {
+                registered.append(cellReuseId)
+                setAssociatedObject(self, value: registered, associativeKey: &registeredCells)
+            }
+        } else {
+            setAssociatedObject(self, value: [cellReuseId], associativeKey: &registeredCells)
+        }
+        
+        if !found {
+            registerClass(cellClass, forCellReuseIdentifier: cellReuseId)
+        }
+        
+        return cellReuseId
+    }
+    
+    func dequeueCell(cellClass: AnyClass, indexPath: NSIndexPath) -> UITableViewCell {
+        let reuseId = cellTypeForClass(cellClass)
+        return self.dequeueReusableCellWithIdentifier(reuseId, forIndexPath: indexPath)
+    }
+    
+    func dequeueCell<T where T: UITableViewCell>(indexPath: NSIndexPath) -> T {
+        let reuseId = cellTypeForClass(T.self)
+        return self.dequeueReusableCellWithIdentifier(reuseId, forIndexPath: indexPath) as! T
     }
 }

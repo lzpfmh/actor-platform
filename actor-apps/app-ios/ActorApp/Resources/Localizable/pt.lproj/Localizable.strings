@@ -46,21 +46,41 @@
 
 "SettingsChangeName" = "Alterar Seu Nome";
 
+
+"SettingsEditHeader" = "Your name";
+
+"SettingsEditHint" = "Please, enter your real name to help people better understand who you are.";
+
+"SettingsEditFieldHint" = "Enter your name";
+
+
 "SettingsAboutNotSet" = "Set about me";
+
+"SettingsChangeAboutTitle" = "About me";
+
+"SettingsChangeAboutHint" = "Tell people anything you want about yourself";
+
 
 "SettingsUsernameNotSet" = "Set username";
 
-"SettingsUsernameTitle" = "Change your username";
+"SettingsUsernameTitle" = "Username";
 
-"SettingsSecurity" = "Privacidade e Segurança";
+"SettingsUsernameHintField" = "Enter your Username";
 
-"SettingsEditHeader" = "Alterar seu nome";
+"SettingsUsernameHint" = "You can choose a username in Actor. If you do, other people will be able to find you by this username and contact you without sharing your phone number.\n\nYou can use a-z, 0-9 and underscores. Minumum length is 5 characters.";
+
+
+"SettingsSecurity" = "Segurança";
+
+"SettingsWallpapers" = "Wallpapers";
 
 "SettingsNotifications" = "Alertas e Sons";
 
 "SettingsAskQuestion" = "Fazer uma pergunta";
 
-"SettingsAbout" = "Sobre";
+"SettingsTwitter" = "App Twitter";
+
+"SettingsAbout" = "App Homepage";
 
 "SettingsVersion" = "Versão {version}";
 
@@ -94,6 +114,8 @@
 
 "ProfileUsername" = "username";
 
+"ProfileTitle" = "Info";
+
 "CallNumber" = "Chamar número";
 
 "CopyNumber" = "Copiar número";
@@ -110,7 +132,9 @@
  * Group
  */
 
-"GroupEditHeader" = "Mudar o tema do grupo";
+"GroupEditHeader" = "Theme";
+
+"GroupEditHint" = "Enter group theme";
 
 "GroupSetPhoto" = "Definir Foto do Grupo";
 
@@ -128,7 +152,15 @@
 
 "GroupMembers" = "{0} MEMBROS";
 
+"GroupMemberAdmin" = "admin";
+
 "GroupMemberInfo" = "Perfil";
+
+"GroupMemberMakeAdmin" = "Make Group admin";
+
+"GroupMemberMakeMessage" = "Are you sure want to make {name} admin of this group?";
+
+"GroupMemberMakeAction" = "Yes";
 
 "GroupMemberKick" = "Remover do Grupo";
 
@@ -176,6 +208,7 @@
 
 "GroupIntegrationLinkRevokeAction" = "Remover";
 
+"GroupMembers" = "MEMBERS";
 
 /*
  * Compose
@@ -235,11 +268,23 @@
  * Privacy
  */
 
-"PrivacyTitle" = "Privacidade e Segurança";
+"SecurityTitle" = "Segurança";
 
 "PrivacyTerminate" = "Encerrar todas as sessões";
 
+"PrivacyTerminateAlert" = "Terminate all sessions";
+
+"PrivacyTerminateAlertSingle" = "Terminate session";
+
 "PrivacyTerminateHint" = "Descredencia todos os demais dispositivos menos este.";
+
+/*
+ * Wallpapers
+ */
+
+"WallpapersTitle" = "Wallpapers";
+
+"WallpapersPhoto" = "Photo Library";
 
 /*
  * Chat
@@ -250,6 +295,18 @@
 "ChatSend" = "Enviar";
 
 "ChatNoGroupAccess" = "Você não é membro";
+
+/*
+ * Find
+ */
+
+"FindTitle" = "Find People";
+
+"FindFieldHint" = "phone number, email or nickname";
+
+"FindHint" = "Enter phone number, email or nickname and press search";
+
+"FindNotFound" = "Sorry, but we are unable to find person for this search query";
 
 /*
  * Placeholders
@@ -301,6 +358,12 @@
 
 "AuthCodeHint" = "Nós te enviamos um SMS com o código.";
 
+"AuthCallHint" = "Actor will call you in {time}";
+
+"AuthCallDoneHint" = "Actor dialed your number.";
+
+"AuthNoCodeHint" = "Doesn't get the code?";
+
 "AuthProfileTitle" = "Suas Informações";
 
 "AuthProfileAddPhoto1" = "adicionar";
@@ -317,7 +380,7 @@
 
 "CurrentLocale" = "Pt";
 
-"InviteText" = "Olá! Vamos mudar para o Actor! https://actor.im/dl";
+"InviteText" = "Olá! Vamos mudar para o Actor! {link}";
 
 "PhotoRemove" = "Remover Foto";
 
@@ -341,6 +404,8 @@
 
 "NavigationSave" = "Salvar";
 
+"NavigationFind" = "Find";
+
 "AlertCancel" = "Cancelar";
 
 "AlertNext" = "Próximo";
@@ -349,9 +414,17 @@
 
 "AlertOk" = "OK";
 
+"AlertSet" = "Set";
+
 "AlertYes" = "Sim";
 
 "AlertNo" = "Não";
+
+"AlertError" = "Error";
+
+"AlertTryAgain" = "Try Again";
+
+"AlertInvite" = "Invite";
 
 "UnsupportedContent" = "Mensagem não suportada nesta versão. Por favor espere por uma atualização para ver esta mensagem.";
 

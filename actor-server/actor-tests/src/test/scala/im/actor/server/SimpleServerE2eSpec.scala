@@ -3,7 +3,6 @@ package im.actor.server
 import java.net.InetSocketAddress
 
 import akka.contrib.pattern.DistributedPubSubExtension
-import akka.stream.ActorMaterializer
 import com.amazonaws.services.s3.transfer.TransferManager
 import com.typesafe.config.ConfigFactory
 import im.actor.api.rpc.auth._
@@ -21,8 +20,6 @@ import im.actor.server.mtproto.codecs.protocol._
 import im.actor.server.mtproto.protocol._
 import im.actor.server.mtproto.transport.{ MTPackage, TransportPackage }
 import im.actor.server.oauth.{ GoogleProvider, OAuth2GoogleConfig }
-import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
-import im.actor.server.sequence._
 import im.actor.server.session.{ Session, SessionConfig }
 
 import scala.concurrent.ExecutionContext
@@ -36,7 +33,7 @@ class SimpleServerE2eSpec extends ActorSuite(
       |}
     """.stripMargin
   ))
-) with ImplicitFileStorageAdapter with ImplicitUserRegions with ImplicitGroupRegions {
+) with ImplicitFileStorageAdapter with ActorSerializerPrepare {
   behavior of "Server"
 
   it should "connect and Handshake" in Server.e1
@@ -49,20 +46,14 @@ class SimpleServerE2eSpec extends ActorSuite(
 
   it should "throw AuthIdInvalid if valid AuthId invalidated by some reason" in Server.e5
 
-  DbExtension(system).clean()
-  DbExtension(system).migrate()
-
   object Server {
-    val serverConfig = system.settings.config
+    DbExtension(system).clean()
+    DbExtension(system).migrate()
 
-    implicit val materializer = ActorMaterializer()
+    val serverConfig = system.settings.config
 
     val oauthGoogleConfig = OAuth2GoogleConfig.load(system.settings.config.getConfig("services.google.oauth"))
     val sequenceConfig = SequenceServiceConfig.load.toOption.get
-
-    implicit val weakUpdManagerRegion = WeakUpdatesManager.startRegion()
-    implicit val presenceManagerRegion = PresenceManager.startRegion()
-    implicit val groupPresenceManagerRegion = GroupPresenceManager.startRegion()
 
     val mediator = DistributedPubSubExtension(system).mediator
 

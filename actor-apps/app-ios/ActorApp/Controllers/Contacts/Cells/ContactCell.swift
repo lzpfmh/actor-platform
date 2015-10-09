@@ -5,50 +5,65 @@
 import Foundation
 import UIKit
 
-class ContactCell : BasicCell {
+class ContactCell : UATableViewCell, ACBindedCell, ACBindedSearchCell {
+    
+    typealias BindData = ACContact
+    
+    static func bindedCellHeight(table: ACManagedTable, item: BindData) -> CGFloat {
+        return 56
+    }
+    
+    static func bindedCellHeight(item: BindData) -> CGFloat {
+        return 56
+    }
     
     let avatarView = AvatarView(frameSize: 40, type: .Rounded);
     let shortNameView = UILabel();
     let titleView = UILabel();
     
-    init(reuseIdentifier:String) {
-        super.init(reuseIdentifier: reuseIdentifier, separatorPadding: 80)
+    override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
+        super.init(cellStyle: "cell", reuseIdentifier: reuseIdentifier)
         
-        titleView.font = UIFont(name: "HelveticaNeue", size: 18);
+        titleView.font = UIFont.systemFontOfSize(18)
         titleView.textColor = MainAppTheme.list.contactsTitle
         
-        shortNameView.font = UIFont(name: "HelveticaNeue-Bold", size: 18);
+        shortNameView.font = UIFont.boldSystemFontOfSize(18)
         shortNameView.textAlignment = NSTextAlignment.Center
         shortNameView.textColor = MainAppTheme.list.contactsShortTitle
         
-        self.contentView.addSubview(avatarView);
-        self.contentView.addSubview(shortNameView);
-        self.contentView.addSubview(titleView);
-        
-        backgroundColor = MainAppTheme.list.bgColor
-        
-        let selectedView = UIView()
-        selectedView.backgroundColor = MainAppTheme.list.bgSelectedColor
-        selectedBackgroundView = selectedView
+        self.contentView.addSubview(avatarView)
+        self.contentView.addSubview(shortNameView)
+        self.contentView.addSubview(titleView)
     }
 
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func bindContact(contact: ACContact, shortValue: String?, isLast: Bool) {
-        avatarView.bind(contact.getName(), id: contact.getUid(), avatar: contact.getAvatar());
+    func bind(item: ACContact, search: String?) {
+        bind(item)
+    }
+    
+    func bind(item: ACContact, table: ACManagedTable, index: Int, totalCount: Int) {
+        bind(item)
+    }
+    
+    func bind(item: ACContact) {
+        avatarView.bind(item.name, id: item.uid, avatar: item.avatar);
         
-        titleView.text = contact.getName();
+        titleView.text = item.name;
         
-        if (shortValue == nil){
-            shortNameView.hidden = true;
+        shortNameView.hidden = true
+    }
+
+    func bindDisabled(disabled: Bool) {
+        if disabled {
+            titleView.alpha = 0.5
+            avatarView.alpha = 0.5
         } else {
-            shortNameView.text = shortValue!;
-            shortNameView.hidden = false;
+            titleView.alpha = 1
+            avatarView.alpha = 1
         }
-        
-        hideSeparator(isLast)
     }
     
     override func layoutSubviews() {

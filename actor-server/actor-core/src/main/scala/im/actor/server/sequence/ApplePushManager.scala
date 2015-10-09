@@ -16,32 +16,38 @@ import im.actor.server.db.ActorPostgresDriver.api._
 import im.actor.server.db.DbExtension
 import im.actor.server.user.{ UserProcessorRegion, UserExtension, UserOffice }
 
-case class ApplePushManagerConfig(certs: List[ApnsCert], isSandbox: Boolean)
+import scala.util.Try
+
+case class ApplePushManagerConfig(certs: List[ApnsCert])
 
 object ApplePushManagerConfig {
   def load(config: Config): ApplePushManagerConfig = {
     ApplePushManagerConfig(
-      certs = config.getConfigList("certs").toList map (ApnsCert.fromConfig),
-      isSandbox = config.getBoolean("sandbox")
+      certs = config.getConfigList("certs").toList map ApnsCert.fromConfig
     )
 
   }
 }
 
-case class ApnsCert(key: Int, path: String, password: String)
+case class ApnsCert(key: Int, path: String, password: String, isSandbox: Boolean)
 
 object ApnsCert {
   def fromConfig(config: Config): ApnsCert = {
-    ApnsCert(config.getInt("key"), config.getString("path"), config.getString("password"))
+    ApnsCert(
+      config.getInt("key"),
+      config.getString("path"),
+      config.getString("password"),
+      Try(config.getBoolean("sandbox")).getOrElse(false)
+    )
   }
 }
 
 class ApplePushManager(config: ApplePushManagerConfig, system: ActorSystem) {
-  private implicit val ec: ExecutionContext = system.dispatcher
+  import system.dispatcher
 
   private val managers: Map[Int, PushManager[SimpleApnsPushNotification]] =
     config.certs.map { cert ⇒
-      val env = config.isSandbox match {
+      val env = cert.isSandbox match {
         case false ⇒ ApnsEnvironment.getProductionEnvironment
         case true  ⇒ ApnsEnvironment.getSandboxEnvironment
       }
@@ -87,10 +93,7 @@ private class LoggingRejectedNotificationListener(_system: ActorSystem) extends 
 
 private class CleanExpiredTokenListener(_system: ActorSystem) extends ExpiredTokenListener[SimpleApnsPushNotification] {
   private implicit val system: ActorSystem = _system
-  private implicit val ec: ExecutionContext = _system.dispatcher
-  private implicit val timeout: Timeout = Timeout(20.seconds)
-  private implicit val db: Database = DbExtension(_system).db
-  private implicit val userProcessorRegion: UserProcessorRegion = UserExtension(_system).processorRegion
+  implicit val db: Database = DbExtension(system).db
 
   override def handleExpiredTokens(
     pushManager:   PushManager[_ <: SimpleApnsPushNotification],
@@ -98,7 +101,7 @@ private class CleanExpiredTokenListener(_system: ActorSystem) extends ExpiredTok
   ): Unit = {
     expiredTokens foreach { t ⇒
       system.log.warning("APNS reported expired token, loggint out")
-      UserOffice.logoutByAppleToken(t.getToken)
+      UserExtension(system).logoutByAppleToken(t.getToken)
     }
   }
 }

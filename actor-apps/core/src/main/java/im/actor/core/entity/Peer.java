@@ -4,6 +4,8 @@
 
 package im.actor.core.entity;
 
+import com.google.j2objc.annotations.Property;
+
 import java.io.IOException;
 
 import im.actor.runtime.bser.Bser;
@@ -46,7 +48,9 @@ public class Peer extends BserObject {
         return new Peer(PeerType.GROUP, gid);
     }
 
+    @Property("readonly, nonatomic")
     private PeerType peerType;
+    @Property("readonly, nonatomic")
     private int peerId;
 
     public Peer(PeerType peerType, int peerId) {
@@ -69,7 +73,7 @@ public class Peer extends BserObject {
                 type = 1;
                 break;
         }
-        return ((long)peerId & 0xFFFFFFFFL)+ (((long) type & 0xFFFFFFFFL) << 32);
+        return ((long) peerId & 0xFFFFFFFFL) + (((long) type & 0xFFFFFFFFL) << 32);
     }
 
     public PeerType getPeerType() {
@@ -131,5 +135,9 @@ public class Peer extends BserObject {
     @Override
     public String toString() {
         return "{type:" + peerType + ", id:" + peerId + "}";
+    }
+
+    public String toIdString() {
+        return peerType + "_" + peerId;
     }
 }

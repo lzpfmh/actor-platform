@@ -5,362 +5,380 @@
 import UIKit
 import MobileCoreServices 
 
-class SettingsViewController: AATableViewController {
+class SettingsViewController: ACContentTableController {
     
-    // MARK: -
-    // MARK: Private vars
+    private var phonesCells: ACManagedArrayRows<ACUserPhone, TitledCell>!
     
-    private let UserInfoCellIdentifier = "UserInfoCellIdentifier"
-    private let TitledCellIdentifier = "TitledCellIdentifier"
-    private let TextCellIdentifier = "TextCellIdentifier"
-    
-    private var tableData: UATableData!
-    
-    private let uid: Int
-    private var user: ACUserVM?
-    private var binder = Binder()
-    
-    private var phones: JavaUtilArrayList?
-    
-    // MARK: -
-    // MARK: Constructors
+    private var headerCell: ACAvatarRow!
+    private var nicknameCell: ACTitledRow!
+    private var aboutCell: ACTextRow!
     
     init() {
+        super.init(style: ACContentTableStyle.SettingsPlain)
+        
         uid = Int(Actor.myUid())
-        super.init(style: UITableViewStyle.Plain)
         
-        var title = "";
-        if (MainAppTheme.tab.showText) {
-            title = NSLocalizedString("TabSettings", comment: "Settings Title")
-        }
+        content = ACAllEvents_Main.SETTINGS()
         
-        tabBarItem = UITabBarItem(title: title,
+        tabBarItem = UITabBarItem(title: localized("TabSettings"),
             image: MainAppTheme.tab.createUnselectedIcon("TabIconSettings"),
             selectedImage: MainAppTheme.tab.createSelectedIcon("TabIconSettingsHighlighted"))
         
-        if (!MainAppTheme.tab.showText) {
-            tabBarItem.imageInsets = UIEdgeInsetsMake(6, 0, -6, 0);
-        }
+        applyStyle("controller.settings")
     }
 
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // MARK: -
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        view.backgroundColor = MainAppTheme.list.bgColor
-        edgesForExtendedLayout = UIRectEdge.Top
-        automaticallyAdjustsScrollViewInsets = false
-
-        user = Actor.getUserWithUid(jint(uid))
-        
-        tableView.separatorStyle = UITableViewCellSeparatorStyle.None
-        tableView.backgroundColor = MainAppTheme.list.backyardColor
-        tableView.clipsToBounds = false
-        tableView.tableFooterView = UIView()
-        
-        tableData = UATableData(tableView: tableView)
-        tableData.registerClass(UserPhotoCell.self, forCellReuseIdentifier: UserInfoCellIdentifier)
-        tableData.registerClass(TitledCell.self, forCellReuseIdentifier: TitledCellIdentifier)
-        tableData.registerClass(TextCell.self, forCellReuseIdentifier: TextCellIdentifier)
-        tableData.tableScrollClosure = { (tableView: UITableView) -> () in
-            self.applyScrollUi(tableView)
-        }
-        
-        // Avatar
-        
-        let profileInfoSection = tableData.addSection(true)
-            .setFooterHeight(15)
-        
-        profileInfoSection.addCustomCell { (tableView, indexPath) -> UITableViewCell in
-            let cell: UserPhotoCell = tableView.dequeueReusableCellWithIdentifier(self.UserInfoCellIdentifier, forIndexPath: indexPath) as! UserPhotoCell
-            cell.contentView.superview?.clipsToBounds = false
-            if self.user != nil {
-                cell.setUsername(self.user!.getNameModel().get())
-            }
-            self.applyScrollUi(tableView, cell: cell)
-            
-            return cell
-        }.setHeight(avatarHeight)
-        
-        // Nick
-        profileInfoSection
-            .addCustomCell { (tableView, indexPath) -> UITableViewCell in
-                let cell: TitledCell = tableView.dequeueReusableCellWithIdentifier(self.TitledCellIdentifier, forIndexPath: indexPath) as! TitledCell
-                
-                cell.enableNavigationIcon()
-                
-                if let nick = self.user!.getNickModel().get() {
-                    cell.setTitle(localized("ProfileUsername"), content: "@\(nick)")
-                    cell.setAction(false)
-                } else {
-                    cell.setTitle(localized("ProfileUsername"), content: localized("SettingsUsernameNotSet"))
-                    cell.setAction(true)
-                }
-                
-                return cell
-                
-            }
-            .setHeight(55)
-            .setAction { () -> () in
-                self.textInputAlert("SettingsUsernameTitle", content: self.user!.getNickModel().get(), action: "AlertSave", tapYes: { (nval) -> () in
-                    var nNick: String? = nval.trim()
-                    if nNick?.length == 0 {
-                        nNick = nil
-                    }
-                    self.execute(Actor.editMyNickCommandWithNick(nNick))
-                })
-        }
-        
-        var about = self.user!.getAboutModel().get()
-        if about == nil {
-            about = localized("SettingsAboutNotSet")
-        }
-        let aboutCell = profileInfoSection
-            .addTextCell(localized("ProfileAbout"), text: about)
-            .setEnableNavigation(true)
-        if self.user!.getAboutModel().get() == nil {
-            aboutCell.setIsAction(true)
-        }
-        aboutCell.setAction { () -> () in
-            var text = self.user!.getAboutModel().get()
-            if text == nil {
-                text = ""
-            }
-            let controller = EditTextController(title: localized("SettingsChangeAboutTitle"), actionTitle: localized("NavigationSave"), content: text, completition: { (newText) -> () in
-                var updatedText: String? = newText.trim()
-                if updatedText?.length == 0 {
-                    updatedText = nil
-                }
-                self.execute(Actor.editMyAboutCommandWithNick(updatedText))
-            })
-            let navigation = AANavigationController(rootViewController: controller)
-            self.presentViewController(navigation, animated: true, completion: nil)
-        }
-        
-        // Phones
-        profileInfoSection
-            .addCustomCells(55, countClosure: { () -> Int in
-            if (self.phones != nil) {
-                return Int(self.phones!.size())
-            }
-            return 0
-            }) { (tableView, index, indexPath) -> UITableViewCell in
-                let cell: TitledCell = tableView.dequeueReusableCellWithIdentifier(self.TitledCellIdentifier, forIndexPath: indexPath) as! TitledCell
-                if let phone = self.phones!.getWithInt(jint(index)) as? ACUserPhone {
-                    cell.setTitle(phone.getTitle(), content: "+\(phone.getPhone())")
-                }
-                return cell
-            }.setAction { (index) -> () in
-                let phoneNumber = (self.phones?.getWithInt(jint(index)).getPhone())!
-                let hasPhone = UIApplication.sharedApplication().canOpenURL(NSURL(string: "tel://")!)
-                if (!hasPhone) {
-                    UIPasteboard.generalPasteboard().string = "+\(phoneNumber)"
-                    self.alertUser("NumberCopied")
-                } else {
-                    self.showActionSheet(["CallNumber", "CopyNumber"],
-                        cancelButton: "AlertCancel",
-                        destructButton: nil,
-                        sourceView: self.view,
-                        sourceRect: self.view.bounds,
-                        tapClosure: { (index) -> () in
-                            if (index == 0) {
-                                UIApplication.sharedApplication().openURL(NSURL(string: "tel://+\(phoneNumber)")!)
-                            } else if index == 1 {
-                                UIPasteboard.generalPasteboard().string = "+\(phoneNumber)"
-                                self.alertUser("NumberCopied")
-                            }
-                        })
-                }
-            }
-        
+    override func tableDidLoad() {
         
         // Profile
-        let topSection = tableData.addSection(true)
-        topSection.setHeaderHeight(15)
-        topSection.setFooterHeight(15)
-        
-        // Profile: Set Photo
-        topSection.addActionCell("SettingsSetPhoto", actionClosure: { () -> () in
-            let hasCamera = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
-            self.showActionSheet(hasCamera ? ["PhotoCamera", "PhotoLibrary"] : ["PhotoLibrary"],
-                cancelButton: "AlertCancel",
-                destructButton: self.user!.getAvatarModel().get() != nil ? "PhotoRemove" : nil,
-                sourceView: self.view,
-                sourceRect: self.view.bounds,
-                tapClosure: { (index) -> () in
-                    if index == -2 {
-                        self.confirmUser("PhotoRemoveGroupMessage",
-                            action: "PhotoRemove",
-                            cancel: "AlertCancel",
-                            sourceView: self.view,
-                            sourceRect: self.view.bounds,
-                            tapYes: { () -> () in
-                                Actor.removeMyAvatar()
-                            })
-                    } else if index >= 0 {
-                        let takePhoto: Bool = (index == 0) && hasCamera
-                        self.pickAvatar(takePhoto, closure: { (image) -> () in
-                            Actor.changeOwnAvatar(image)
-                        })
-                    }
-            })
-        })
-        
-        // Profile: Set Name
-        topSection.addActionCell("SettingsChangeName", actionClosure: { () -> () in
+        section { [unowned self] (s) -> () in
 
-            let alertView = UIAlertView(title: nil,
-                message: NSLocalizedString("SettingsEditHeader", comment: "Title"),
-                delegate: nil,
-                cancelButtonTitle: NSLocalizedString("AlertCancel", comment: "Cancel Title"))
-            
-            alertView.addButtonWithTitle(NSLocalizedString("AlertSave", comment: "Save Title"))
-            alertView.alertViewStyle = UIAlertViewStyle.PlainTextInput
-            alertView.textFieldAtIndex(0)!.autocapitalizationType = UITextAutocapitalizationType.Words
-            alertView.textFieldAtIndex(0)!.text = self.user!.getNameModel().get()
-            alertView.textFieldAtIndex(0)?.keyboardAppearance = MainAppTheme.common.isDarkKeyboard ? UIKeyboardAppearance.Dark : UIKeyboardAppearance.Light
-            
-            alertView.tapBlock = { (alertView, buttonIndex) -> () in
-                if (buttonIndex == 1) {
-                    let textField = alertView.textFieldAtIndex(0)!
-                    if textField.text!.length > 0 {
-                        self.execute(Actor.editMyNameCommandWithName(textField.text))
+            // Profile: Photo and name
+            self.headerCell = s.avatar() { [unowned self] (r) -> () in
+
+                r.bindAction = { [unowned self] (r) -> () in
+                    
+                    let upload = Actor.getOwnAvatarVM().uploadState.get() as? ACAvatarUploadState
+                    let avatar = self.user.getAvatarModel().get()
+                    let presence = self.user.getPresenceModel().get()
+                    let presenceText = Actor.getFormatter().formatPresence(presence, withSex: self.user.getSex())
+                    let name = self.user.getNameModel().get()
+                    
+                    r.id = self.uid
+                    r.title = name
+                    
+                    if (upload != nil && upload!.isUploading.boolValue) {
+                        r.avatar = nil
+                        r.avatarPath = upload!.descriptor
+                        r.avatarLoading = true
+                    } else {
+                        r.avatar = avatar
+                        r.avatarPath = nil
+                        r.avatarLoading = false
+                    }
+                    
+                    if presenceText != nil {
+                        r.subtitle = presenceText
+                        if presence!.state.ordinal() == jint(ACUserPresence_State.ONLINE.rawValue) {
+                            r.subtitleStyle = "user.online"
+                        } else {
+                            r.subtitleStyle = "user.offline"
+                        }
+                    } else {
+                        r.subtitle = ""
+                    }
+                }
+                
+                r.avatarDidTap = { [unowned self] (view: UIView) -> () in
+                    let avatar = self.user.getAvatarModel().get()
+                    if avatar != nil && avatar.fullImage != nil {
+                        
+                        let full = avatar.fullImage.fileReference
+                        let small = avatar.smallImage.fileReference
+                        let size = CGSize(width: Int(avatar.fullImage.width), height: Int(avatar.fullImage.height))
+                        
+                        self.presentViewController(PhotoPreviewController(file: full, previewFile: small, size: size, fromView: view), animated: true, completion: nil)
                     }
                 }
             }
             
-            alertView.show()
-        })
+            // Profile: Set Photo
+            s.action("SettingsSetPhoto") { [unowned self] (r) -> () in
+                r.selectAction = { [unowned self] () -> Bool in
+                    let hasCamera = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
+                    self.showActionSheet(hasCamera ? ["PhotoCamera", "PhotoLibrary"] : ["PhotoLibrary"],
+                        cancelButton: "AlertCancel",
+                        destructButton: self.user.getAvatarModel().get() != nil ? "PhotoRemove" : nil,
+                        sourceView: self.view,
+                        sourceRect: self.view.bounds,
+                        tapClosure: { [unowned self] (index) -> () in
+                            if index == -2 {
+                                self.confirmUser("PhotoRemoveGroupMessage",
+                                    action: "PhotoRemove",
+                                    cancel: "AlertCancel",
+                                    sourceView: self.view,
+                                    sourceRect: self.view.bounds,
+                                    tapYes: { () -> () in
+                                        Actor.removeMyAvatar()
+                                })
+                            } else if index >= 0 {
+                                let takePhoto: Bool = (index == 0) && hasCamera
+                                self.pickAvatar(takePhoto, closure: { [unowned self] (image) -> () in
+                                    Actor.changeOwnAvatar(image)
+                                })
+                            }
+                    })
+                    return true
+                }
+            }
+            
+            // Profile: Set Name
+            s.action("SettingsChangeName") { [unowned self] (r) -> () in
+                r.selectAction = { [unowned self] () -> Bool in
+                    
+                    self.startEditField { (c) -> () in
+                        c.title = "SettingsEditHeader"
+                        c.hint = "SettingsEditHint"
+                        
+                        c.initialText = self.user.getNameModel().get()
+                        
+                        c.fieldAutocapitalizationType = .Words
+                        c.fieldHint = "SettingsEditFieldHint"
+                        
+                        c.didDoneTap = { (t, c) -> () in
 
-        // Settings
-        let actionsSection = tableData.addSection(true)
-            .setHeaderHeight(15)
-            .setFooterHeight(15)
-        
-        // Settings: Notifications
-        actionsSection.addNavigationCell("SettingsNotifications", actionClosure: { () -> () in
-            self.navigateNext(SettingsNotificationsViewController(), removeCurrent: false)
-        })
-        
-        // Settings: Privacy
-        actionsSection.addNavigationCell("SettingsSecurity", actionClosure: { () -> () in
-            self.navigateNext(SettingsPrivacyViewController(), removeCurrent: false)
-        })
-        
-        // Support
-        let supportSection = tableData.addSection(true)
-            .setHeaderHeight(15)
-            .setFooterHeight(15)
-        
-        // Support: Ask Question
-        supportSection.addNavigationCell("SettingsAskQuestion", actionClosure: { () -> () in
-            self.execute(Actor.findUsersCommandWithQuery("75551234567"), successBlock: { (val) -> Void in
-                var user:ACUserVM!
-                if let users = val as? IOSObjectArray {
-                    if Int(users.length()) > 0 {
-                        if let tempUser = users.objectAtIndex(0) as? ACUserVM {
-                            user = tempUser
+                            if t.length == 0 {
+                                return
+                            }
+                            
+                            c.executeSafeOnlySuccess(Actor.editMyNameCommandWithName(t)) { (val) -> Void in
+                                c.dismiss()
+                            }
                         }
                     }
-                }
-                self.navigateDetail(ConversationViewController(peer: ACPeer.userWithInt(user.getId())))
-            }, failureBlock: { (val) -> Void in
-                // TODO: Implement
-            })
-        })
-        
-        // Support: Ask Question
-        supportSection.addNavigationCell("SettingsAbout", actionClosure: { () -> () in
-            UIApplication.sharedApplication().openURL(NSURL(string: "https://actor.im")!)
-        })
-        
-        // Support: App version
-        let version = NSBundle.mainBundle().infoDictionary!["CFBundleShortVersionString"] as! String
-        supportSection.addCommonCell()
-            .setContent(NSLocalizedString("SettingsVersion", comment: "Version").stringByReplacingOccurrencesOfString("{version}", withString: version, options: NSStringCompareOptions(), range: nil))
-            .setStyle(.Hint)
-        
-        // Bind
-        
-        tableView.reloadData()
-        
-        binder.bind(user!.getNameModel()!, closure: { (value: String?) -> () in
-            if value == nil {
-                return
-            }
-            
-            if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                cell.setUsername(value!)
-            }
-        })
-        
-        binder.bind(user!.getAboutModel(), closure: { (value: String?) -> () in
-            var about = self.user!.getAboutModel().get()
-            if about == nil {
-                about = localized("SettingsAboutNotSet")
-                aboutCell.setIsAction(true)
-            } else {
-                aboutCell.setIsAction(false)
-            }
-            aboutCell.setContent(localized("ProfileAbout"), text: about)
-            self.tableView.reloadRowsAtIndexPaths([NSIndexPath(forRow: 2, inSection: 0)], withRowAnimation: UITableViewRowAnimation.Automatic)
-        })
-        
-        binder.bind(user!.getNickModel(), closure: { (value: String?) -> () in
-            self.tableView.reloadRowsAtIndexPaths([NSIndexPath(forRow: 1, inSection: 0)], withRowAnimation: UITableViewRowAnimation.Automatic)
-        })
-        
-        binder.bind(Actor.getOwnAvatarVM().getUploadState(), valueModel2: user!.getAvatarModel()) { (upload: ACAvatarUploadState?, avatar:  ACAvatar?) -> () in
-            if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                if (upload != nil && upload!.isUploading().boolValue) {
-                    cell.userAvatarView.bind(self.user!.getNameModel().get(), id: jint(self.uid), fileName: upload?.getDescriptor())
-                    cell.setProgress(true)
-                } else {
-                    cell.userAvatarView.bind(self.user!.getNameModel().get(), id: jint(self.uid), avatar: avatar, clearPrev: false)
-                    cell.setProgress(false)
+                    
+                    return true
                 }
             }
         }
         
-        binder.bind(user!.getPresenceModel(), closure: { (presence: ACUserPresence?) -> () in
-            let presenceText = Actor.getFormatter().formatPresence(presence, withSex: self.user!.getSex())
-            if presenceText != nil {
-                if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? UserPhotoCell {
-                    cell.setPresence(presenceText)
+        section { (s) -> () in
+            s.action("Connect VK", closure: { (r) -> () in
+                r.selectAction = { () -> Bool in
+                    self.executeSafe(Actor.startWebAction("vkOAuth")) { (val) -> Void in
+                        if let d = val as? ACWebActionDescriptor {
+                            let controller = AANavigationController()
+                            controller.viewControllers = [WebActionController(desc: d)]
+                            self.presentViewController(controller, animated: true, completion: nil)
+                        }
+                    }
+                    return false
+                }
+            })
+        }
+        
+        // Settings
+        section { (s) -> () in
+            
+            // Settings: Notifications
+            s.navigate("SettingsNotifications", controller: SettingsNotificationsViewController.self)
+            
+            // Settings: Security
+            s.navigate("SettingsSecurity", controller: SettingsPrivacyViewController.self)
+            
+            // Settings: Wallpapper
+            s.custom({ [unowned self] (r: ACCustomRow<WallpapperSettingsCell>) -> () in
+                r.height = 230
+                r.closure = { [unowned self] (cell) -> () in
+                    cell.wallpapperDidTap = { [unowned self] (name) -> () in
+                        self.presentViewController(WallpapperPreviewController(imageName: name), animated: true, completion: nil)
+                    }
+                }
+//                r.selectAction = { [unowned self] () -> Bool in
+//                    self.navigateNext(SettingsWallpapper(), removeCurrent: false)
+//                    return false
+//                }
+            })
+        }
+        
+        // Contacts
+        section { [unowned self] (s) -> () in
+
+            // Contacts: Nicknames
+            self.nicknameCell = s.titled("ProfileUsername") { [unowned self] (r) -> () in
+                
+                r.accessoryType = .DisclosureIndicator
+
+                r.bindAction = { [unowned self] (r) -> () in
+                    if let nick = self.user.getNickModel().get() {
+                        r.subtitle = "@\(nick)"
+                        r.isAction = false
+                    } else {
+                        r.subtitle = localized("SettingsUsernameNotSet")
+                        r.isAction = true
+                    }
+                }
+                
+                r.selectAction = { [unowned self] () -> Bool in
+                    
+                    self.startEditField { (c) -> () in
+                        
+                        c.title = "SettingsUsernameTitle"
+                        c.actionTitle = "AlertSave"
+                        
+                        if let nick = self.user.getNickModel().get() {
+                            c.initialText = nick
+                        }
+                        
+                        c.fieldHint = "SettingsUsernameHintField"
+                        c.fieldAutocorrectionType = .No
+                        c.fieldAutocapitalizationType = .None
+                        c.hint = "SettingsUsernameHint"
+                        
+                        c.didDoneTap = { (t, c) -> () in
+                            var nNick: String? = t.trim()
+                            if nNick?.length == 0 {
+                                nNick = nil
+                            }
+                            c.executeSafeOnlySuccess(Actor.editMyNickCommandWithNick(nNick), successBlock: { (val) -> Void in
+                                c.dismiss()
+                            })
+                        }
+                    }
+                    
+                    return false
                 }
             }
-        })
-        
-        binder.bind(user!.getPhonesModel(), closure: { (phones: JavaUtilArrayList?) -> () in
-            if phones != nil {
-                self.phones = phones
-                self.tableView.reloadData()
-            }
-        })
-    }
-    
-    override func viewWillAppear(animated: Bool) {
-        super.viewWillAppear(animated)
-        
-        Actor.onProfileOpenWithUid(jint(uid))
-        
-        MainAppTheme.navigation.applyStatusBar()
-        navigationController?.navigationBar.shadowImage = UIImage()
+            
+            // Contacts: About
+            self.aboutCell = s.text("ProfileAbout") { [unowned self] (r) -> () in
 
-        applyScrollUi(tableView)
+                r.navigate = true
+                
+                r.bindAction = { [unowned self] (r) -> () in
+                    if let about = self.user.getAboutModel().get() {
+                        r.content = about
+                        r.isAction = false
+                    } else {
+                        r.content = localized("SettingsAboutNotSet")
+                        r.isAction = true
+                    }
+                }
+                
+                r.selectAction = { [unowned self] () -> Bool in
+                    
+                    self.startEditText { (config) -> () in
+                        
+                        config.title = "SettingsChangeAboutTitle"
+                        config.hint = "SettingsChangeAboutHint"
+                        config.actionTitle = "NavigationSave"
+                        
+                        config.initialText = self.user.getAboutModel().get()
+                        
+                        config.didCompleteTap = { (text, controller) -> () in
+                            
+                            var updatedText: String? = text.trim()
+                            if updatedText?.length == 0 {
+                                updatedText = nil
+                            }
+                            controller.executeSafeOnlySuccess(Actor.editMyAboutCommandWithNick(updatedText), successBlock: { (val) -> Void in
+                                controller.dismiss()
+                            })
+                        }
+                    }
+                    
+                    return false
+                }
+            }
+ 
+            // Profile: Phones
+            self.phonesCells = s.arrays() { [unowned self] (r: ACManagedArrayRows<ACUserPhone, TitledCell>) -> () in
+
+                r.height = 55
+                
+                r.data = self.user.getPhonesModel().get().toSwiftArray()
+                
+                r.bindData = { [unowned self] (c: TitledCell, d: ACUserPhone) -> () in
+                    c.setTitle(d.title, content: "+\(d.phone)")
+                    c.accessoryType = .None
+                }
+                
+                r.bindCopy = { (d: ACUserPhone) -> String? in
+                    return "+\(d.phone)"
+                }
+                
+                r.selectAction = { [unowned self] (d: ACUserPhone) -> Bool in
+                    let hasPhone = UIApplication.sharedApplication().canOpenURL(NSURL(string: "telprompt://")!)
+                    if (!hasPhone) {
+                        UIPasteboard.generalPasteboard().string = "+\(d.phone)"
+                        self.alertUser("NumberCopied")
+                    } else {
+                        UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(d.phone)")!)
+                    }
+                    return true
+                }
+            }
+        }
+        
+        // Support
+        section { (s) -> () in
+
+            // Support: Ask Question
+            if let account = AppConfig.supportAccount {
+                s.navigate("SettingsAskQuestion", closure: { (r) -> () in
+                    r.selectAction = { () -> Bool in
+                        self.executeSafe(Actor.findUsersCommandWithQuery(account)) { (val) -> Void in
+                            var user:ACUserVM!
+                            if let users = val as? IOSObjectArray {
+                                if Int(users.length()) > 0 {
+                                    if let tempUser = users.objectAtIndex(0) as? ACUserVM {
+                                        user = tempUser
+                                    }
+                                }
+                            }
+                            self.navigateDetail(ConversationViewController(peer: ACPeer.userWithInt(user.getId())))
+                        }
+                        return true
+                    }
+                })
+            }
+            
+            // Support: Twitter
+            if let twitter = AppConfig.appTwitter {
+                s.url("SettingsTwitter", url: "https://twitter.com/\(twitter)")
+            }
+            
+            // Support: Home page
+            if let homePage = AppConfig.appHomePage {
+                s.url("SettingsAbout", url: homePage)
+            }
+
+            // Support: App version
+            let version = NSBundle.mainBundle().infoDictionary!["CFBundleShortVersionString"] as! String
+            s.hint(version.replace("{version}", dest: version))
+        }
     }
-    
-    override func viewWillDisappear(animated: Bool) {
-        super.viewWillDisappear(animated)
+
+    override func tableWillBind(binder: Binder) {
         
-        Actor.onProfileClosedWithUid(jint(uid))
+        // Header
         
-        navigationController?.navigationBar.lt_reset()
+        binder.bind(user.getNameModel()!) { [unowned self] (value: String?) -> () in
+            self.headerCell.reload()
+        }
+        
+        binder.bind(user.getAvatarModel()) { [unowned self] (value: ACAvatar?) -> () in
+            self.headerCell.reload()
+        }
+        
+        binder.bind(Actor.getOwnAvatarVM().uploadState) { [unowned self] (value: ACAvatarUploadState?) -> () in
+            self.headerCell.reload()
+        }
+        
+        binder.bind(user.getPresenceModel()) { [unowned self] (presence: ACUserPresence?) -> () in
+            self.headerCell.reload()
+        }
+        
+        // Bind nick
+        
+        binder.bind(user.getNickModel()) { [unowned self] (value: String?) -> () in
+            self.nicknameCell.reload()
+        }
+        
+        // Bind about
+        
+        binder.bind(user.getAboutModel()) { [unowned self] (value: String?) -> () in
+            self.aboutCell.reload()
+        }
+
+        // Bind Phone
+        
+        binder.bind(user.getPhonesModel(), closure: { [unowned self] (phones: ACArrayListUserPhone?) -> () in
+            self.phonesCells.data = (phones?.toSwiftArray())!
+            self.phonesCells.reload()
+        })
     }
 }
-

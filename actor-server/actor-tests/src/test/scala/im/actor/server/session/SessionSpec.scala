@@ -1,13 +1,7 @@
 package im.actor.server.session
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.Random
-
 import akka.testkit.TestProbe
 import com.google.protobuf.ByteString
-import scodec.bits._
-
 import im.actor.api.rpc.auth._
 import im.actor.api.rpc.codecs._
 import im.actor.api.rpc.contacts.UpdateContactRegistered
@@ -18,9 +12,14 @@ import im.actor.api.rpc.weak.UpdateUserOffline
 import im.actor.api.rpc.{ AuthorizedClientData, Request, RpcOk }
 import im.actor.server.mtproto.protocol._
 import im.actor.server.mtproto.transport._
-import im.actor.server.sequence.{ SeqUpdatesManager, WeakUpdatesManager }
+import im.actor.server.sequence.{ SeqUpdatesManager, WeakUpdatesExtension }
 import im.actor.server.session.SessionEnvelope.Payload
-import im.actor.server.user.UserOffice
+import im.actor.server.user.UserExtension
+import scodec.bits._
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.util.Random
 
 class SessionSpec extends BaseSessionSpec {
   behavior of "Session actor"
@@ -37,6 +36,8 @@ class SessionSpec extends BaseSessionSpec {
   case class sessions() {
 
     implicit val probe = TestProbe()
+
+    val weakUpdatesExt = WeakUpdatesExtension(system)
 
     def e1() = {
       val authId = createAuthId()
@@ -110,8 +111,8 @@ class SessionSpec extends BaseSessionSpec {
 
       val secondMessageId = Random.nextLong()
       sendMessageBox(authId, sessionId, sessionRegion.ref, secondMessageId, RpcRequestBox(encodedSignUpRequest))
-
       expectMessageAck(authId, sessionId, secondMessageId)
+
       expectRpcResult() should matchPattern {
         case RpcOk(ResponseAuth(_, _)) ⇒
       }
@@ -167,7 +168,7 @@ class SessionSpec extends BaseSessionSpec {
       implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id)
 
       val update = UpdateContactRegistered(1, true, 1L, 2L)
-      Await.result(UserOffice.broadcastClientUpdate(update, None, isFat = false), 1.second)
+      Await.result(UserExtension(system).broadcastClientUpdate(update, None, isFat = false), 1.second)
 
       expectSeqUpdate(authId, sessionId).update should ===(update.toByteArray)
     }
@@ -212,7 +213,7 @@ class SessionSpec extends BaseSessionSpec {
       implicit val clientData = AuthorizedClientData(authId, sessionId, authResult.asInstanceOf[RpcOk].response.asInstanceOf[ResponseAuth].user.id)
 
       val update = UpdateContactRegistered(1, true, 1L, 5L)
-      Await.result(db.run(WeakUpdatesManager.broadcastUserWeakUpdate(clientData.userId, update)), 1.second)
+      Await.result(db.run(weakUpdatesExt.broadcastUserWeakUpdate(clientData.userId, update, reduceKey = None)), 1.second)
 
       expectWeakUpdate(authId, sessionId).update should ===(update.toByteArray)
     }
@@ -287,7 +288,7 @@ class SessionSpec extends BaseSessionSpec {
       expectNewSession(authId, sessionId, messageId)
       expectMessageAck(authId, sessionId, messageId)
 
-      SeqUpdatesManager.persistAndPushUpdateF(authId, UpdateContactRegistered(1, false, 1L, 2L), None, isFat = false)
+      SeqUpdatesManager.persistAndPushUpdate(authId, UpdateContactRegistered(1, false, 1L, 2L), None, isFat = false)
 
       expectSeqUpdate(authId, sessionId)
       probe.expectNoMsg()

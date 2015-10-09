@@ -3,41 +3,35 @@ package im.actor.server.api.rpc.service
 import java.net.URLEncoder
 import java.time.{ LocalDateTime, ZoneOffset }
 
+import com.google.protobuf.ByteString
+import im.actor.api.rpc._
+import im.actor.api.rpc.auth._
+import im.actor.api.rpc.contacts.{ ApiPhoneToImport, ResponseGetContacts, UpdateContactRegistered }
+import im.actor.api.rpc.misc.ResponseVoid
+import im.actor.api.rpc.users.{ ApiContactRecord, ApiContactType, ApiSex }
+import im.actor.server._
+import im.actor.server.activation.internal.{ ActivationConfig, InternalCodeActivation }
+import im.actor.server.api.rpc.RpcApiService
+import im.actor.server.api.rpc.service.auth.AuthErrors
 import im.actor.server.api.rpc.service.contacts.ContactsServiceImpl
+import im.actor.server.models.contact.UserContact
+import im.actor.server.mtproto.codecs.protocol.MessageBoxCodec
+import im.actor.server.mtproto.protocol.{ MessageBox, SessionHello }
+import im.actor.server.oauth.{ GoogleProvider, OAuth2GoogleConfig }
+import im.actor.server.persist.auth.AuthTransaction
+import im.actor.server.sequence.SeqUpdatesManager
+import im.actor.server.session.{ HandleMessageBox, Session, SessionConfig, SessionEnvelope }
+import im.actor.server.sms.{ AuthCallEngine, AuthSmsEngine }
 import im.actor.server.user.ContactsUtils
+import org.scalatest.Inside._
 import shardakka.ShardakkaExtension
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Random
 import scalaz.\/
 
-import akka.contrib.pattern.DistributedPubSubExtension
-import com.google.protobuf.{ ByteString, CodedInputStream }
-import org.scalatest.Inside._
-
-import im.actor.api.rpc._
-import im.actor.api.rpc.auth._
-import im.actor.api.rpc.contacts.{ ResponseGetContacts, ApiPhoneToImport, UpdateContactRegistered }
-import im.actor.api.rpc.misc.ResponseVoid
-import im.actor.api.rpc.users.{ ApiContactRecord, ApiContactType, ApiSex }
-import im.actor.server.activation.internal.{ ActivationConfig, InternalCodeActivation }
-import im.actor.server.api.rpc.RpcApiService
-import im.actor.server.api.rpc.service.auth.AuthErrors
-import im.actor.server.api.rpc.service.sequence.{ SequenceServiceConfig, SequenceServiceImpl }
-import im.actor.server.models.contact.UserContact
-import im.actor.server.mtproto.codecs.protocol.MessageBoxCodec
-import im.actor.server.mtproto.protocol.{ MessageBox, SessionHello }
-import im.actor.server.oauth.{ GoogleProvider, OAuth2GoogleConfig }
-import im.actor.server.persist.auth.AuthTransaction
-import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
-import im.actor.server.sequence.{ SeqUpdatesManager, WeakUpdatesManager }
-import im.actor.server.session.{ HandleMessageBox, Session, SessionConfig, SessionEnvelope }
-import im.actor.server.sms.AuthSmsEngine
-import im.actor.server._
-
 final class AuthServiceSpec
   extends BaseAppSuite
-  with ImplicitUserRegions
   with ImplicitSequenceService
   with ImplicitSessionRegionProxy
   with SequenceMatchers {
@@ -114,10 +108,6 @@ final class AuthServiceSpec
   object s {
     implicit val ec = system.dispatcher
 
-    implicit val weakUpdManagerRegion = WeakUpdatesManager.startRegion()
-    implicit val presenceManagerRegion = PresenceManager.startRegion()
-    implicit val groupPresenceManagerRegion = GroupPresenceManager.startRegion()
-
     implicit val sessionConfig = SessionConfig.load(system.settings.config.getConfig("session"))
     Session.startRegion(Some(Session.props(mediator)))
     implicit val sessionRegion = Session.startRegionProxy()
@@ -125,7 +115,7 @@ final class AuthServiceSpec
     val oauthGoogleConfig = DummyOAuth2Server.config
     implicit val oauth2Service = new GoogleProvider(oauthGoogleConfig)
     val activationConfig = ActivationConfig.load.get
-    val activationContext = InternalCodeActivation.newContext(activationConfig, new DummySmsEngine, null)
+    val activationContext = InternalCodeActivation.newContext(activationConfig, new DummySmsEngine, new DummyCallEngine, null)
     implicit val service = new auth.AuthServiceImpl(activationContext, mediator)
     implicit val rpcApiService = system.actorOf(RpcApiService.props(Seq(service)))
     implicit val contactService = new ContactsServiceImpl
@@ -238,7 +228,7 @@ final class AuthServiceSpec
 
       whenReady(service.handleValidateCode("wrongHash123123", correctAuthCode)) { resp ⇒
         inside(resp) {
-          case Error(AuthErrors.InvalidAuthTransaction) ⇒
+          case Error(AuthErrors.PhoneCodeExpired) ⇒
         }
       }
     }
@@ -367,7 +357,7 @@ final class AuthServiceSpec
       //after code invalidation we remove authCode and AuthTransaction, thus we got InvalidAuthTransaction error
       whenReady(service.handleValidateCode(transactionHash, correctAuthCode)) { resp ⇒
         inside(resp) {
-          case Error(AuthErrors.InvalidAuthTransaction) ⇒
+          case Error(AuthErrors.PhoneCodeExpired) ⇒
         }
       }
       whenReady(db.run(persist.AuthCode.findByTransactionHash(transactionHash))) { code ⇒
@@ -434,7 +424,7 @@ final class AuthServiceSpec
             user.phone shouldEqual Some(phoneNumber)
             user.contactInfo should have length 1
             user.contactInfo.head should matchPattern {
-              case ApiContactRecord(ApiContactType.Phone, None, Some(phone), Some(_), None) ⇒
+              case ApiContactRecord(ApiContactType.Phone, None, Some(phone), Some(_), None, _) ⇒
             }
         }
       }
@@ -705,7 +695,7 @@ final class AuthServiceSpec
       }
 
       whenReady(service.handleGetOAuth2Params("wrongHash22aksdl320d3", correctUri)) { resp ⇒
-        inside(resp) { case Error(AuthErrors.InvalidAuthTransaction) ⇒ }
+        inside(resp) { case Error(AuthErrors.EmailCodeExpired) ⇒ }
       }
     }
 
@@ -749,7 +739,7 @@ final class AuthServiceSpec
       }
       whenReady(service.handleCompleteOAuth2("wrongTransactionHash29191djlksa", "4/YUlNIa55xSZRA4JcQkLzAh749bHAcv96aA-oVMHTQRU")) { resp ⇒
         inside(resp) {
-          case Error(AuthErrors.InvalidAuthTransaction) ⇒
+          case Error(AuthErrors.EmailCodeExpired) ⇒
         }
       }
     }
@@ -801,7 +791,7 @@ final class AuthServiceSpec
       }
       whenReady(service.handleCompleteOAuth2(transactionHash, "wrongCode")) { resp ⇒
         inside(resp) {
-          case Error(AuthErrors.FailedToGetOAuth2Token) ⇒
+          case Error(AuthErrors.EmailCodeExpired) ⇒
         }
       }
 
@@ -869,7 +859,7 @@ final class AuthServiceSpec
               u.sex shouldEqual userSex
               u.contactInfo should have length 1
               u.contactInfo.head should matchPattern {
-                case ApiContactRecord(ApiContactType.Email, Some(`email`), None, Some(_), None) ⇒
+                case ApiContactRecord(ApiContactType.Email, Some(`email`), None, Some(_), None, _) ⇒
               }
           }
           resp.toOption.get.user
@@ -1074,4 +1064,8 @@ object DummyOAuth2Server {
 
 class DummySmsEngine extends AuthSmsEngine {
   override def sendCode(phoneNumber: Long, code: String): Future[Unit] = Future.successful(())
+}
+
+class DummyCallEngine extends AuthCallEngine {
+  override def sendCode(phoneNumber: Long, code: String, language: String): Future[Unit] = Future.successful(())
 }

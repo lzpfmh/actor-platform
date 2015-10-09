@@ -33,7 +33,7 @@ import im.actor.messenger.app.util.images.ops.ImageLoading;
 import im.actor.runtime.files.FileSystemReference;
 import im.actor.runtime.mvvm.ValueChangedListener;
 import im.actor.runtime.mvvm.ValueDoubleChangedListener;
-import im.actor.runtime.mvvm.ValueModel;
+import im.actor.runtime.mvvm.Value;
 import uk.co.senab.photoview.PhotoView;
 
 import static im.actor.messenger.app.core.Core.groups;
@@ -117,21 +117,21 @@ public class ViewAvatarActivity extends BaseActivity {
         if (peer.getPeerType() == PeerType.PRIVATE && peer.getPeerId() == myUid()) {
             bind(getAvatar(), messenger().getOwnAvatarVM().getUploadState(), new ValueDoubleChangedListener<Avatar, AvatarUploadState>() {
                 @Override
-                public void onChanged(Avatar val, ValueModel<Avatar> valueModel, AvatarUploadState val2, ValueModel<AvatarUploadState> valueModel2) {
+                public void onChanged(Avatar val, Value<Avatar> Value, AvatarUploadState val2, Value<AvatarUploadState> Value2) {
                     performBind(val, val2);
                 }
             });
         } else if (peer.getPeerType() == PeerType.GROUP) {
             bind(getAvatar(), messenger().getGroupAvatarVM(peer.getPeerId()).getUploadState(), new ValueDoubleChangedListener<Avatar, AvatarUploadState>() {
                 @Override
-                public void onChanged(Avatar val, ValueModel<Avatar> valueModel, AvatarUploadState val2, ValueModel<AvatarUploadState> valueModel2) {
+                public void onChanged(Avatar val, Value<Avatar> Value, AvatarUploadState val2, Value<AvatarUploadState> Value2) {
                     performBind(val, val2);
                 }
             });
         } else if (peer.getPeerType() == PeerType.PRIVATE) {
             bind(getAvatar(), new ValueChangedListener<Avatar>() {
                 @Override
-                public void onChanged(Avatar val, ValueModel<Avatar> valueModel) {
+                public void onChanged(Avatar val, Value<Avatar> Value) {
                     performBind(val, null);
                 }
             });
@@ -140,7 +140,7 @@ public class ViewAvatarActivity extends BaseActivity {
         }
     }
 
-    private ValueModel<Avatar> getAvatar() {
+    private Value<Avatar> getAvatar() {
         if (peer.getPeerType() == PeerType.GROUP) {
             return groups().get(peer.getPeerId()).getAvatar();
         } else {
@@ -171,7 +171,7 @@ public class ViewAvatarActivity extends BaseActivity {
             goneView(noPhoto);
 
             // Large image
-            String file = messenger().getDownloadedDescriptor(avatar.getFullImage().getFileReference().getFileId());
+            String file = messenger().findDownloadedDescriptor(avatar.getFullImage().getFileReference().getFileId());
             if (file != null) {
                 try {
                     Bitmap bitmap = ImageLoading.loadBitmapOptimized(file);
@@ -190,7 +190,7 @@ public class ViewAvatarActivity extends BaseActivity {
 
             // Trying to show preview first
             boolean isAppliedPreview = false;
-            String largeFile = messenger().getDownloadedDescriptor(avatar.getLargeImage().getFileReference().getFileId());
+            String largeFile = messenger().findDownloadedDescriptor(avatar.getLargeImage().getFileReference().getFileId());
             if (largeFile != null) {
                 try {
                     Bitmap bitmap = ImageLoading.loadBitmapOptimized(largeFile);
@@ -202,7 +202,7 @@ public class ViewAvatarActivity extends BaseActivity {
                 }
             }
             if (!isAppliedPreview) {
-                String smallFile = messenger().getDownloadedDescriptor(avatar.getSmallImage().getFileReference().getFileId());
+                String smallFile = messenger().findDownloadedDescriptor(avatar.getSmallImage().getFileReference().getFileId());
                 if (smallFile != null) {
                     try {
                         Bitmap bitmap = ImageLoading.loadBitmapOptimized(smallFile);

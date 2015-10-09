@@ -4,8 +4,8 @@ import im.actor.api.rpc.RpcError
 
 object AuthErrors {
   val AuthSessionNotFound = RpcError(404, "AUTH_SESSION_NOT_FOUND", "Auth session not found.", false, None)
+  val CurrentSessionTermination = RpcError(400, "CURRENT_SESSION_TERMINATION", "You tried to terminate current auth session.", false, None)
   val InvalidKey = RpcError(400, "INVALID_KEY", "Invalid key.", false, None)
-  val InvalidAuthTransaction = RpcError(400, "TRANSACTION_HASH_INVALID", "", false, None)
   val PhoneNumberInvalid = RpcError(400, "PHONE_NUMBER_INVALID", "Invalid phone number.", false, None)
   val PhoneNumberUnoccupied = RpcError(400, "PHONE_NUMBER_UNOCCUPIED", "", false, None)
   val PhoneCodeEmpty = RpcError(400, "PHONE_CODE_EMPTY", "Code is empty.", false, None)
@@ -20,4 +20,6 @@ object AuthErrors {
   val OAuthUserIdDoesNotMatch = RpcError(400, "WRONG_OAUTH2_USER_ID", "Email does not match one provided on the first step.", false, None)
   val ActivationServiceError = RpcError(500, "ACTIVATION_SERVICE_ERROR", "Error occured in activation service. Try again later.", true, None)
   val InvalidAuthCodeHash = RpcError(400, "CODE_HASH_INVALID", "", false, None)
+
+  def activationFailure(message: String) = RpcError(500, "ACTIVATION_ERROR", message, false, None)
 }

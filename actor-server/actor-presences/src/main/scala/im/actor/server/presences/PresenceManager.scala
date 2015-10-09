@@ -1,20 +1,14 @@
 package im.actor.server.presences
 
-import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
-
 import akka.actor._
 import akka.contrib.pattern.ShardRegion.Passivate
-import akka.contrib.pattern.{ ClusterSharding, ShardRegion }
-import akka.pattern.ask
-import akka.util.Timeout
+import im.actor.server.db.DbExtension
+import im.actor.server.{ models, persist }
 import org.joda.time.DateTime
 import slick.driver.PostgresDriver.api._
 
-import im.actor.server.db.DbExtension
-import im.actor.server.{ models, persist }
-
-case class PresenceManagerRegion(val ref: ActorRef)
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 sealed trait Presence
 
@@ -32,78 +26,38 @@ object Presences {
 }
 
 object PresenceManager {
-  import Presences._
 
   private val InitRetryTimeout = 5.seconds
 
-  private sealed trait Message
+  private[presences] sealed trait Message
 
   @SerialVersionUID(1L)
-  private case class UserPresenceChange(presence: Presence, authId: Long, timeout: Long) extends Message
+  private[presences] case class UserPresenceChange(presence: Presence, authId: Long, timeout: Long) extends Message
 
   @SerialVersionUID(1L)
-  private case class Subscribe(consumer: ActorRef) extends Message
+  private[presences] case class Subscribe(consumer: ActorRef) extends Message
 
   @SerialVersionUID(1L)
-  private case class SubscribeAck(consumer: ActorRef)
+  private[presences] case class SubscribeAck(consumer: ActorRef)
 
   @SerialVersionUID(1L)
-  private case class Unsubscribe(consumer: ActorRef) extends Message
+  private[presences] case class Unsubscribe(consumer: ActorRef) extends Message
 
   @SerialVersionUID(1L)
-  private case class UnsubscribeAck(consumer: ActorRef)
+  private[presences] case class UnsubscribeAck(consumer: ActorRef)
 
   @SerialVersionUID(1L)
-  private case class Envelope(userId: Int, payload: Message)
+  private[presences] case class Envelope(userId: Int, payload: Message)
 
   @SerialVersionUID(1L)
   private case class Initialized(lastSeenAt: Option[DateTime])
 
-  private val idExtractor: ShardRegion.IdExtractor = {
-    case env @ Envelope(userId, payload) ⇒ (userId.toString, env)
-  }
-
-  private val shardResolver: ShardRegion.ShardResolver = msg ⇒ msg match {
-    case Envelope(userId, _) ⇒ (userId % 32).toString // TODO: configurable
-  }
-
-  private def startRegion(props: Option[Props])(implicit system: ActorSystem): PresenceManagerRegion =
-    PresenceManagerRegion(ClusterSharding(system).start(
-      typeName = "PresenceManager",
-      entryProps = props,
-      idExtractor = idExtractor,
-      shardResolver = shardResolver
-    ))
-
-  def startRegion()(implicit system: ActorSystem): PresenceManagerRegion = startRegion(Some(props))
-
-  def startRegionProxy()(implicit system: ActorSystem): PresenceManagerRegion = startRegion(None)
-
   def props = Props(classOf[PresenceManager])
-
-  def subscribe(userId: Int, consumer: ActorRef)(implicit region: PresenceManagerRegion, ec: ExecutionContext, timeout: Timeout): Future[Unit] = {
-    region.ref.ask(Envelope(userId, Subscribe(consumer))).mapTo[SubscribeAck].map(_ ⇒ ())
-  }
-
-  def subscribe(userIds: Set[Int], consumer: ActorRef)(implicit region: PresenceManagerRegion, ec: ExecutionContext, timeout: Timeout): Future[Unit] =
-    Future.sequence(userIds map (subscribe(_, consumer))) map (_ ⇒ ())
-
-  def unsubscribe(userId: Int, consumer: ActorRef)(implicit region: PresenceManagerRegion, ec: ExecutionContext, timeout: Timeout): Future[Unit] = {
-    region.ref.ask(Envelope(userId, Unsubscribe(consumer))).mapTo[UnsubscribeAck].map(_ ⇒ ())
-  }
-
-  def presenceSetOnline(userId: Int, authId: Long, timeout: Long)(implicit region: PresenceManagerRegion): Unit = {
-    region.ref ! Envelope(userId, UserPresenceChange(Online, authId, timeout))
-  }
-
-  def presenceSetOffline(userId: Int, authId: Long, timeout: Long)(implicit region: PresenceManagerRegion): Unit = {
-    region.ref ! Envelope(userId, UserPresenceChange(Offline, authId, timeout))
-  }
 }
 
 class PresenceManager extends Actor with ActorLogging with Stash {
-  import Presences._
   import PresenceManager._
+  import Presences._
 
   implicit val ec: ExecutionContext = context.dispatcher
   private val db: Database = DbExtension(context.system).db
@@ -117,7 +71,6 @@ class PresenceManager extends Actor with ActorLogging with Stash {
   private[this] var devicePresences = Map.empty[Long, Presence]
   private[this] var consumers = Set.empty[ActorRef]
   private[this] var state = PresenceState(userId, Offline, None)
-  private[this] var lastChange = UserPresenceChange(Offline, 0, 0)
 
   private def initialize(userId: Int): Unit = {
     db.run(persist.presences.UserPresence.find(userId).map {

@@ -1,4 +1,10 @@
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
+
 import React from 'react';
+import ReactMixin from 'react-mixin';
+import { IntlMixin } from 'react-intl';
 
 import CreateGroupActionCreators from 'actions/CreateGroupActionCreators';
 import CreateGroupStore from 'stores/CreateGroupStore';
@@ -9,15 +15,13 @@ import Modal from 'react-modal';
 
 import { KeyCodes } from 'constants/ActorAppConstants';
 
-const appElement = document.getElementById('actor-web-app');
-Modal.setAppElement(appElement);
-
 const getStateFromStores = () => {
   return {
-    isShown: CreateGroupStore.isModalOpen()
+    isOpen: CreateGroupStore.isModalOpen()
   };
 };
 
+@ReactMixin.decorate(IntlMixin)
 class CreateGroup extends React.Component {
   constructor(props) {
     super(props);
@@ -34,29 +38,32 @@ class CreateGroup extends React.Component {
   }
 
   render() {
-    const isShown = this.state.isShown;
+    const { isOpen } = this.state;
 
-    return (
-      <Modal className="modal-new modal-new--create-group" closeTimeoutMS={150} isOpen={isShown}>
+    if (isOpen) {
+      return (
+        <Modal className="modal-new modal-new--create-group"
+               closeTimeoutMS={150}
+               isOpen={isOpen}
+               style={{width: 350}}>
 
-        <header className="modal-new__header">
-          <a className="modal-new__header__close modal-new__header__icon material-icons" onClick={this.onClose}>clear</a>
-          <h3 className="modal-new__header__title">Create group</h3>
-        </header>
+          <header className="modal-new__header">
+            <a className="modal-new__header__close modal-new__header__icon material-icons" onClick={this.onClose}>clear</a>
+            <h3 className="modal-new__header__title">{this.getIntlMessage('createGroupModalTitle')}</h3>
+          </header>
 
-        <CreateGroupForm/>
+          <CreateGroupForm/>
 
-      </Modal>
-    );
+        </Modal>
+      );
+    } else {
+      return null;
+    }
   }
 
-  onChange = () => {
-    this.setState(getStateFromStores());
-  }
+  onChange = () => this.setState(getStateFromStores());
 
-  onClose = () => {
-    CreateGroupActionCreators.closeModal();
-  }
+  onClose = () => CreateGroupActionCreators.closeModal();
 
   onKeyDown = (event) => {
     if (event.keyCode === KeyCodes.ESC) {
@@ -65,8 +72,5 @@ class CreateGroup extends React.Component {
     }
   }
 }
-
-CreateGroup.displayName = 'CreateGroup';
-
 
 export default CreateGroup;

@@ -4,6 +4,9 @@
 
 import Foundation
 
+import Fabric
+import Crashlytics
+
 @objc class AppDelegate : UIResponder,  UIApplicationDelegate {
     
     var window : UIWindow?
@@ -12,24 +15,39 @@ import Foundation
     private var completionHandler: ((UIBackgroundFetchResult) -> Void)?
     private let badgeView = UIImageView()
     
+    private var isInited = false
+    
+    private var isVisible = false
+    
     private var badgeCount = 0
     private var isBadgeVisible = false
     
-    func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject : AnyObject]?) -> Bool {
-        
-        createActor()
-        
-        var config = Actor.config
+    func assumeInited() {
+        if isInited {
+            return
+        }
+        isInited = true
         
         // Apply crash logging
-//        if config.mint != nil {
-//            Mint.sharedInstance().disableNetworkMonitoring()
-//            Mint.sharedInstance().initAndStartSession(config.mint!)
-//        }
+        
+        // Even when Fabric/Crashlytics not configured
+        // this method doesn't crash
+        Fabric.with([Crashlytics.self()])
+        
+        // Creating Actor
+        createActor()
+        
+        // Creating app style
+        initStyles()
+    }
+    
+    func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject : AnyObject]?) -> Bool {
+        
+        assumeInited()
         
         // Register hockey app
-        if config.hockeyapp != nil {
-            BITHockeyManager.sharedHockeyManager().configureWithIdentifier(config.hockeyapp!)
+        if AppConfig.hockeyapp != nil {
+            BITHockeyManager.sharedHockeyManager().configureWithIdentifier(AppConfig.hockeyapp!)
             BITHockeyManager.sharedHockeyManager().disableCrashManager = true
             BITHockeyManager.sharedHockeyManager().updateManager.checkForUpdateOnLaunch = true
             BITHockeyManager.sharedHockeyManager().startManager()
@@ -51,7 +69,7 @@ import Foundation
         MainAppTheme.applyAppearance(application)
 
         // Bind Messenger LifeCycle
-        binder.bind(Actor.getAppState().getIsSyncing(), closure: { (value: JavaLangBoolean?) -> () in
+        binder.bind(Actor.getAppState().isSyncing, closure: { (value: JavaLangBoolean?) -> () in
             if value!.booleanValue() {
                 if self.syncTask == nil {
                     self.syncTask = application.beginBackgroundTaskWithName("Background Sync", expirationHandler: { () -> Void in
@@ -80,7 +98,7 @@ import Foundation
             // Create root layout for login
             
             let phoneController = AuthPhoneViewController()
-            var loginNavigation =   AANavigationController(rootViewController: phoneController)
+            let loginNavigation =   AANavigationController(rootViewController: phoneController)
             loginNavigation.navigationBar.tintColor = MainAppTheme.navigation.barColor
             loginNavigation.makeBarTransparent()
             
@@ -104,7 +122,7 @@ import Foundation
         window?.addSubview(badgeView)
         
         // Bind badge counter
-        binder.bind(Actor.getAppState().getGlobalCounter(), closure: { (value: JavaLangInteger?) -> () in
+        binder.bind(Actor.getAppState().globalCounter, closure: { (value: JavaLangInteger?) -> () in
             self.badgeCount = Int((value!).integerValue)
             application.applicationIconBadgeNumber = self.badgeCount
             badgeText.text = "\(self.badgeCount)"
@@ -125,21 +143,22 @@ import Foundation
             badgeText.frame = self.badgeView.bounds
         })
         
+        checkAppState(application)
+        
         return true;
     }
     
     func onLoggedIn(isAfterLogin: Bool) {
         // Create root layout for app
-        Actor.onAppVisible()
         var rootController : UIViewController? = nil
         if (isIPad) {
-            var splitController = MainSplitViewController()
+            let splitController = MainSplitViewController()
             splitController.viewControllers = [MainTabViewController(isAfterLogin: isAfterLogin), NoSelectionViewController()]
             
             rootController = splitController
         } else {
-            var tabController = MainTabViewController(isAfterLogin: isAfterLogin)
-            binder.bind(Actor.getAppState().getIsAppLoaded(), valueModel2: Actor.getAppState().getIsAppEmpty()) { (loaded: JavaLangBoolean?, empty: JavaLangBoolean?) -> () in
+            let tabController = MainTabViewController(isAfterLogin: isAfterLogin)
+            binder.bind(Actor.getAppState().isAppLoaded, valueModel2: Actor.getAppState().isAppEmpty) { (loaded: JavaLangBoolean?, empty: JavaLangBoolean?) -> () in
                 if (empty!.booleanValue()) {
                     if (loaded!.booleanValue()) {
                         tabController.showAppIsEmptyPlaceholder()
@@ -156,18 +175,19 @@ import Foundation
         window?.rootViewController = rootController!
     }
     
-    func application(application: UIApplication, openURL url: NSURL, sourceApplication: String?, annotation: AnyObject?) -> Bool {
-        print("open url: \(url)")
+    func application(application: UIApplication, openURL url: NSURL, sourceApplication: String?, annotation: AnyObject) -> Bool {
+        
+        assumeInited()
         
         if (url.scheme == "actor") {
             if (url.host == "invite") {
                 if (Actor.isLoggedIn()) {
-                    var token = url.query?.componentsSeparatedByString("=")[1]
+                    let token = url.query?.componentsSeparatedByString("=")[1]
                     if token != nil {
                         UIAlertView.showWithTitle(nil, message: localized("GroupJoinMessage"), cancelButtonTitle: localized("AlertNo"), otherButtonTitles: [localized("GroupJoinAction")], tapBlock: { (view, index) -> Void in
                             if (index == view.firstOtherButtonIndex) {
-                                self.execute(Actor.joinGroupViaLinkCommandWithUrl(token), successBlock: { (val) -> Void in
-                                    var groupId = val as! JavaLangInteger
+                                Executions.execute(Actor.joinGroupViaLinkCommandWithUrl(token), successBlock: { (val) -> Void in
+                                    let groupId = val as! JavaLangInteger
                                     self.openChat(ACPeer.groupWithInt(groupId.intValue))
                                     }, failureBlock: { (val) -> Void in
                                         
@@ -191,19 +211,61 @@ import Foundation
         return false
     }
     
-    func applicationWillEnterForeground(application: UIApplication) {
-        createActor()
+    // Checking app visible state
+    
+    func checkAppState(application: UIApplication) {
+        if application.applicationState == .Active {
+            if !isVisible {
+                isVisible = true
+                
+                // Mark app as visible
+                Actor.onAppVisible();
+                
+                // Notify analytics about visibilibty change
+                Analytics.track(ACAllEvents.APP_VISIBLEWithBoolean(true))
+                
+                // Hack for resync phone book
+                Actor.onPhoneBookChanged()
+            }
+        } else {
+            if isVisible {
+                isVisible = false
+                
+                // Mark app as hidden
+                Actor.onAppHidden();
+                
+                // Notify analytics about visibilibty change
+                Analytics.track(ACAllEvents.APP_VISIBLEWithBoolean(false))
+            }
+        }
+    }
+
+    // Lifecycle
+    
+    func applicationDidFinishLaunching(application: UIApplication) {
+        assumeInited()
         
-        Actor.onAppVisible();
-        // Hack for resync phone book
-        Actor.onPhoneBookChanged()
+        checkAppState(application)
+    }
+    
+    func applicationDidBecomeActive(application: UIApplication) {
+        assumeInited()
+        
+        checkAppState(application)
+    }
+    
+    func applicationWillEnterForeground(application: UIApplication) {
+        assumeInited()
+        
+        checkAppState(application)
     }
     
     func applicationDidEnterBackground(application: UIApplication) {
-        createActor()
+        assumeInited()
         
-        Actor.onAppHidden();
+        checkAppState(application)
         
+        // Keep application running for 40 secs
         if Actor.isLoggedIn() {
             var completitionTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
             
@@ -220,82 +282,59 @@ import Foundation
         }
     }
     
-    // MARK: -
-    // MARK: Notifications
+    func applicationWillResignActive(application: UIApplication) {
+        assumeInited()
+        
+        checkAppState(application)
+    }
+    
+    // Push notifications
     
     func application(application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: NSData) {
+        assumeInited()
+        
         let tokenString = "\(deviceToken)".stringByReplacingOccurrencesOfString(" ", withString: "").stringByReplacingOccurrencesOfString("<", withString: "").stringByReplacingOccurrencesOfString(">", withString: "")
         
-        var config = Actor.config
-        
-        if config.pushId != nil {
-            Actor.registerApplePushWithApnsId(jint(config.pushId!), withToken: tokenString)
+        if AppConfig.pushId != nil {
+            Actor.registerApplePushWithApnsId(jint(AppConfig.pushId!), withToken: tokenString)
         }
-        
-//        if config.mixpanel != nil {
-//            Mixpanel.sharedInstance().people.addPushDeviceToken(deviceToken)
-//        }
     }
     
     func application(application: UIApplication, didReceiveRemoteNotification userInfo: [NSObject : AnyObject]) {
-        
+        assumeInited()
     }
     
     func application(application: UIApplication, didReceiveRemoteNotification userInfo: [NSObject : AnyObject], fetchCompletionHandler completionHandler: (UIBackgroundFetchResult) -> Void) {
-        createActor()
+        
+        assumeInited()
         
         if !Actor.isLoggedIn() {
             completionHandler(UIBackgroundFetchResult.NoData)
             return
         }
+        
         self.completionHandler = completionHandler
     }
     
     func application(application: UIApplication, performFetchWithCompletionHandler completionHandler: (UIBackgroundFetchResult) -> Void) {
-        createActor()
+        assumeInited()
         
         if !Actor.isLoggedIn() {
             completionHandler(UIBackgroundFetchResult.NoData)
             return
         }
         self.completionHandler = completionHandler
-    }
-    
-    func execute(command: ACCommand) {
-        execute(command, successBlock: nil, failureBlock: nil)
-    }
-    
-    func execute(command: ACCommand, successBlock: ((val: Any?) -> Void)?, failureBlock: ((val: Any?) -> Void)?) {
-        var window = UIApplication.sharedApplication().windows[1] as! UIWindow
-        var hud = MBProgressHUD(window: window)
-        hud.mode = MBProgressHUDMode.Indeterminate
-        hud.removeFromSuperViewOnHide = true
-        window.addSubview(hud)
-        window.bringSubviewToFront(hud)
-        hud.show(true)
-        command.startWithCallback(CocoaCallback(result: { (val:Any?) -> () in
-            dispatchOnUi {
-                hud.hide(true)
-                successBlock?(val: val)
-            }
-            }, error: { (val) -> () in
-                dispatchOnUi {
-                    hud.hide(true)
-                    failureBlock?(val: val)
-                }
-        }))
-    }
+    } 
     
     func openChat(peer: ACPeer) {
         for i in UIApplication.sharedApplication().windows {
-            var root = (i as! UIWindow).rootViewController
-            if let tab = root as? MainTabViewController {
-                var controller = tab.viewControllers![tab.selectedIndex] as! AANavigationController
-                var destController = ConversationViewController(peer: peer)
+            if let tab = i.rootViewController as? MainTabViewController {
+                let controller = tab.viewControllers![tab.selectedIndex] as! AANavigationController
+                let destController = ConversationViewController(peer: peer)
                 destController.hidesBottomBarWhenPushed = true
                 controller.pushViewController(destController, animated: true)
                 return
-            } else if let split = root as? MainSplitViewController {
+            } else if let split = i.rootViewController as? MainSplitViewController {
                 split.navigateDetail(ConversationViewController(peer: peer))
                 return
             }

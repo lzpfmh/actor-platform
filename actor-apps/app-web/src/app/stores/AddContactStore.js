@@ -1,10 +1,10 @@
 import { EventEmitter } from 'events';
 import ActorAppDispatcher from 'dispatcher/ActorAppDispatcher';
-import { ActionTypes } from 'constants/ActorAppConstants';
+import { ActionTypes, AddContactMessages } from 'constants/ActorAppConstants';
 
 const CHANGE_EVENT = 'change';
 
-let _isModalOpen = false,
+let _isOpen = false,
     _message = null;
 
 class AddContactStore extends EventEmitter {
@@ -13,7 +13,7 @@ class AddContactStore extends EventEmitter {
   }
 
   isModalOpen() {
-    return _isModalOpen;
+    return _isOpen;
   }
 
   getMessage() {
@@ -38,25 +38,25 @@ let AddContactStoreInstance = new AddContactStore();
 AddContactStoreInstance.dispatchToken = ActorAppDispatcher.register(action => {
   switch(action.type) {
     case ActionTypes.CONTACT_ADD_MODAL_SHOW:
-      _isModalOpen = true;
+      _isOpen = true;
       AddContactStoreInstance.emitChange();
       break;
     case ActionTypes.CONTACT_ADD_MODAL_HIDE:
-      _isModalOpen = false;
+      _isOpen = false;
       _message = null;
       AddContactStoreInstance.emitChange();
       break;
     case ActionTypes.CONTACT_ADD_MODAL_FIND_USER_OK:
-      _isModalOpen = false;
+      _isOpen = false;
       _message = null;
       AddContactStoreInstance.emitChange();
       break;
     case ActionTypes.CONTACT_ADD_MODAL_FIND_USER_UNREGISTERED:
-      _message = 'This phone is not registered in Actor.';
+      _message = AddContactMessages.PHONE_NOT_REGISTERED;
       AddContactStoreInstance.emitChange();
       break;
     case ActionTypes.CONTACT_ADD_MODAL_FIND_USER_IN_CONTACT:
-      _message = 'You already have this user in contacts.';
+      _message = AddContactMessages.ALREADY_HAVE;
       AddContactStoreInstance.emitChange();
       break;
     default:

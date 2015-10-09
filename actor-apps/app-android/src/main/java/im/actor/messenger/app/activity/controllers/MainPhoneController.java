@@ -44,7 +44,7 @@ import im.actor.messenger.app.view.HeaderViewRecyclerAdapter;
 import im.actor.messenger.app.view.OnItemClickedListener;
 import im.actor.messenger.app.view.PagerSlidingTabStrip;
 import im.actor.runtime.mvvm.ValueDoubleChangedListener;
-import im.actor.runtime.mvvm.ValueModel;
+import im.actor.runtime.mvvm.Value;
 
 import static im.actor.messenger.app.core.Core.messenger;
 import static im.actor.messenger.app.view.ViewUtils.goneView;
@@ -213,18 +213,14 @@ public class MainPhoneController extends MainBaseController {
             public void onPageSelected(int position) {
                 if (position == 0) {
                     if (position != prevPage) {
-                        messenger().trackDialogsOpen();
                     }
                     if (prevPage == 1) {
-                        messenger().trackContactsClosed();
                     }
                     prevPage = position;
                 } else if (position == 1) {
                     if (position != prevPage) {
-                        messenger().trackContactsOpen();
                     }
                     if (prevPage == 0) {
-                        messenger().trackDialogsClosed();
                     }
                     prevPage = position;
                 }
@@ -317,8 +313,8 @@ public class MainPhoneController extends MainBaseController {
                 messenger().getAppState().getIsAppEmpty(),
                 new ValueDoubleChangedListener<Boolean, Boolean>() {
                     @Override
-                    public void onChanged(Boolean isAppLoaded, ValueModel<Boolean> valueModel,
-                                          Boolean isAppEmpty, ValueModel<Boolean> valueModel2) {
+                    public void onChanged(Boolean isAppLoaded, Value<Boolean> Value,
+                                          Boolean isAppEmpty, Value<Boolean> Value2) {
                         if (isAppEmpty) {
                             if (isAppLoaded) {
                                 barTabs.setVisibility(View.GONE);
@@ -526,6 +522,9 @@ public class MainPhoneController extends MainBaseController {
                 default:
                 case 0:
                     DialogsFragment res1 = new DialogsFragment();
+                    Bundle arguments = new Bundle();
+                    arguments.putString("invite_url", joinGroupUrl);
+                    res1.setArguments(arguments);
                     res1.setHasOptionsMenu(false);
                     return res1;
                 case 1:

@@ -1,5 +1,8 @@
 package im.actor.runtime.markdown;
 
+import im.actor.runtime.Log;
+import im.actor.runtime.regexp.MatcherCompat;
+
 import java.util.ArrayList;
 
 public class MarkdownParser {
@@ -142,25 +145,38 @@ public class MarkdownParser {
         return false;
     }
 
+    /**
+     * Handling urls
+     *
+     * @param cursor
+     * @param limit
+     * @param elements
+     */
     private void handleUrls(TextCursor cursor, int limit, ArrayList<MDText> elements) {
-        while (handleUrl(cursor, limit, elements)) ;
-    }
 
-    private boolean handleUrl(TextCursor cursor, int limit, ArrayList<MDText> elements) {
-        if (mode == MODE_FULL ||mode == MODE_ONLY_LINKS) {
-            Url url = findUrl(cursor, limit);
-            if (url != null) {
-                handleText(cursor, url.getStart(), elements);
-                String title = cursor.text.substring(url.getStart() + 1, url.getMiddle());
-                String urlVal = cursor.text.substring(url.getMiddle() + 2, url.getEnd());
-                elements.add(new MDUrl(title, urlVal));
-                cursor.currentOffset = url.getEnd() + 1;
-                return true;
+        if (mode == MODE_FULL || mode == MODE_ONLY_LINKS) {
+            while (true) {
+                TitledUrl url = findFormattedUrl(cursor, limit);
+                if (url != null) {
+
+                    // Handling text before url first
+                    handleRawText(cursor, url.getStart(), elements);
+
+                    // Adding url
+                    String title = cursor.text.substring(url.getStart() + 1, url.getMiddle());
+                    String urlVal = cursor.text.substring(url.getMiddle() + 2, url.getEnd());
+                    elements.add(new MDUrl(title, urlVal));
+
+                    // Adjusting offset
+                    cursor.currentOffset = url.getEnd() + 1;
+                } else {
+                    break;
+                }
             }
         }
 
-        handleText(cursor, limit, elements);
-        return false;
+        // Handling remaining text
+        handleRawText(cursor, limit, elements);
     }
 
     /**
@@ -170,10 +186,41 @@ public class MarkdownParser {
      * @param limit    text end
      * @param elements current elements
      */
-    private void handleText(TextCursor cursor, int limit, ArrayList<MDText> elements) {
+    private void handleRawText(TextCursor cursor, int limit, ArrayList<MDText> elements) {
+        while (true) {
+            BasicUrl url = findUrl(cursor, limit);
+            if (url != null) {
+                String link = cursor.text.substring(url.getStart(), url.getEnd());
+
+                // Handling text before url first
+                addText(cursor, url.getStart(), elements);
+
+                // Adding url
+                elements.add(new MDUrl(link, link));
+
+                // Adjusting offset
+                cursor.currentOffset = url.getEnd();
+
+                continue;
+            }
+
+            addText(cursor, limit, elements);
+
+            return;
+        }
+    }
+
+    /**
+     * Adding raw simple text
+     *
+     * @param cursor   text cursor
+     * @param limit    text end
+     * @param elements current elements
+     */
+    private void addText(TextCursor cursor, int limit, ArrayList<MDText> elements) {
         if (cursor.currentOffset < limit) {
             elements.add(new MDRawText(cursor.text.substring(cursor.currentOffset, limit)));
-            cursor.currentOffset = limit + 1;
+            cursor.currentOffset = limit;
         }
     }
 
@@ -263,10 +310,11 @@ public class MarkdownParser {
      * @param limit  search limit
      * @return found url, null if not found
      */
-    private Url findUrl(TextCursor cursor, int limit) {
-
+    private TitledUrl findFormattedUrl(TextCursor cursor, int limit) {
         start_loop:
         for (int start = cursor.currentOffset; start < limit; start++) {
+
+            // Finding beginning of url
             if (cursor.text.charAt(start) == '[') {
                 if (!isGoodAnchor(cursor.text, start - 1)) {
                     continue start_loop;
@@ -275,6 +323,7 @@ public class MarkdownParser {
                 continue start_loop;
             }
 
+            // Finding middle part of url
             middle_loop:
             for (int middle = start + 1; middle < limit - 1; middle++) {
                 if (cursor.text.charAt(middle) != ']' || cursor.text.charAt(middle + 1) != '(') {
@@ -286,12 +335,34 @@ public class MarkdownParser {
                     if (cursor.text.charAt(end) != ')') {
                         continue end_loop;
                     }
-
-                    return new Url(start, middle, end);
+                    return new TitledUrl(start, middle, end);
                 }
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Finding non-formatted urls in texts
+     *
+     * @param cursor current text cursor
+     * @param limit  end of cursor
+     * @return founded url
+     */
+    private BasicUrl findUrl(TextCursor cursor, int limit) {
+        for (int i = cursor.currentOffset; i < limit; i++) {
+            if (!isGoodAnchor(cursor.text, i - 1)) {
+                continue;
+            }
+            String currentText = cursor.text.substring(i, limit);
+            MatcherCompat matcher = Patterns.WEB_URL_START.matcher(currentText);
+            if (matcher.hasMatch()) {
+                String url = matcher.group();
+                int start = i + matcher.start();
+                return new BasicUrl(start, start + url.length());
+            }
+        }
         return null;
     }
 
@@ -330,18 +401,45 @@ public class MarkdownParser {
         return true;
     }
 
-    private static class Url {
+    private static abstract class Url {
+        public abstract int getStart();
+
+        public abstract int getEnd();
+    }
+
+    private static class BasicUrl extends Url {
+        private int start;
+        private int end;
+
+        public BasicUrl(int start, int end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        @Override
+        public int getStart() {
+            return start;
+        }
+
+        @Override
+        public int getEnd() {
+            return end;
+        }
+    }
+
+    private static class TitledUrl extends Url {
 
         private int start;
         private int middle;
         private int end;
 
-        public Url(int start, int middle, int end) {
+        public TitledUrl(int start, int middle, int end) {
             this.start = start;
             this.middle = middle;
             this.end = end;
         }
 
+        @Override
         public int getStart() {
             return start;
         }
@@ -350,6 +448,7 @@ public class MarkdownParser {
             return middle;
         }
 
+        @Override
         public int getEnd() {
             return end;
         }

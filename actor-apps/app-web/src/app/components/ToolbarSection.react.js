@@ -2,13 +2,12 @@ import React from 'react';
 import ReactMixin from 'react-mixin';
 import { IntlMixin } from 'react-intl';
 import classnames from 'classnames';
+import { escapeWithEmoji } from 'utils/EmojiUtils';
 
 import ActivityActionCreators from 'actions/ActivityActionCreators';
 
 import DialogStore from 'stores/DialogStore';
 import ActivityStore from 'stores/ActivityStore';
-
-//import AvatarItem from 'components/common/AvatarItem.react';
 
 const getStateFromStores = () => {
   return {
@@ -44,24 +43,23 @@ class ToolbarSection extends React.Component {
     }
   };
 
-  onChange = () => {
-    this.setState(getStateFromStores());
-  };
+  onChange = () => this.setState(getStateFromStores());
 
   render() {
-    const info = this.state.dialogInfo;
-    const isActivityOpen = this.state.isActivityOpen;
+    const { dialogInfo, isActivityOpen } = this.state;
 
-    let infoButtonClassName = classnames('button button--icon', {
-      'button--active': isActivityOpen
+    const infoButtonClassName = classnames('button button--icon', {
+      'active': isActivityOpen
     });
 
-    if (info != null) {
+
+
+    if (dialogInfo !== null) {
       return (
         <header className="toolbar row">
           <div className="toolbar__peer col-xs">
-            <span className="toolbar__peer__title">{info.name}</span>
-            <span className="toolbar__peer__presence">{info.presence}</span>
+            <span className="toolbar__peer__title" dangerouslySetInnerHTML={{__html: escapeWithEmoji(dialogInfo.name)}}/>
+            <span className="toolbar__peer__presence">{dialogInfo.presence}</span>
           </div>
 
           <div className="toolbar__controls">

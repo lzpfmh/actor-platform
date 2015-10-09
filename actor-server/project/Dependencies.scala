@@ -4,16 +4,20 @@ import sbt._
 
 object Dependencies {
   object V {
+    val actorCommons = "0.0.6"
     val akka = "2.3.13"
     val akkaExperimental = "1.0"
+    val cats = "0.2.0"
     val scalaz = "7.1.1"
-    val slick = "3.0.0"
+    val slick = "3.0.3"
     val scalatest = "2.2.4"
-    val catsVersion    = "0.1.2"
-
+    val shardakka = "0.1.8"
   }
 
   object Compile {
+    val actorConcurrent         = "im.actor"                      %% "actor-concurrent"              % V.actorCommons
+    val shardakka               = "im.actor"                      %% "shardakka"                     % V.shardakka
+
     val akkaActor               = "com.typesafe.akka"             %% "akka-actor"                    % V.akka exclude("com.google.protobuf", "protobuf-java")
     val akkaPersistence         = "com.typesafe.akka"             %% "akka-persistence-experimental" % V.akka exclude("com.google.protobuf", "protobuf-java")
     val akkaContrib             = "com.typesafe.akka"             %% "akka-contrib"                  % V.akka exclude("com.google.protobuf", "protobuf-java")
@@ -23,6 +27,8 @@ object Dependencies {
     val akkaHttpPlayJson        = "de.heikoseeberger"             %% "akka-http-play-json"           % "1.0.0"
     val akkaSlf4j               = "com.typesafe.akka"             %% "akka-slf4j"                    % V.akka
 
+    val sprayWebsocket          = "com.wandoulabs.akka"           %% "spray-websocket"               % "0.1.4"
+
     val akkaPersistenceJdbc     = "com.github.dnvriend"           %% "akka-persistence-jdbc"         % "1.1.7"
     val apacheEmail             = "org.apache.commons"            %  "commons-email"                 % "1.4"
 
@@ -30,8 +36,7 @@ object Dependencies {
     val caffeine                = "com.github.ben-manes.caffeine" %  "caffeine"                      % "1.2.0"
     val eaioUuid                = "com.eaio.uuid"                 %  "uuid"                          % "3.4"
 
-    val cats                    = "org.spire-math"                %% "cats-core"                     % V.catsVersion
-    val catsStd                 = "org.spire-math"                %% "cats-std"                      % V.catsVersion
+    val cats                    = "org.spire-math"                %% "cats"                          % V.cats
 
     val configs                 = "com.github.kxbmap"             %% "configs"                       % "0.2.4"
 
@@ -39,6 +44,7 @@ object Dependencies {
     val javaCompat              = "org.scala-lang.modules"        %% "scala-java8-compat"            % "0.5.0"
 
     val playJson                = "com.typesafe.play"             %% "play-json"                     % "2.4.2"
+    val upickle                 = "com.lihaoyi"                   %% "upickle"                       % "0.3.6"
 
     val postgresJdbc            = "org.postgresql"                %  "postgresql"                    % "9.4-1201-jdbc41" exclude("org.slf4j", "slf4j-simple")
     val slick                   = "com.typesafe.slick"            %% "slick"                         % V.slick
@@ -85,7 +91,7 @@ object Dependencies {
   object Testing {
     val akkaTestkit             = "com.typesafe.akka"             %% "akka-testkit"                  % V.akka
 
-    val scalacheck      = "org.scalacheck"                        %% "scalacheck"                    % "1.12.2"
+    val scalacheck      = "org.scalacheck"                        %% "scalacheck"                    % "1.12.5"
     val scalatest       = "org.scalatest"                         %% "scalatest"                     % V.scalatest
 
     val jfairy          = "io.codearte.jfairy"                    %  "jfairy"                        % "0.3.1"
@@ -100,14 +106,33 @@ object Dependencies {
     akkaSlf4j, akkaActor, akkaStream
   )
 
-  val activation = shared ++ Seq(akkaActor, akkaHttp, playJson)
+  val activation = shared ++ Seq(akkaActor, akkaHttp, akkaHttpPlayJson, playJson)
 
-  val core = shared ++ Seq(akkaActor, akkaContrib, amazonaws, awsWrap, caffeine, gcmServer, pushy, jodaTime, postgresJdbc, slick, scrImageCore)
+  val bots = shared ++ Seq(upickle, shardakka)
+
+  val botkit = Seq(actorConcurrent, akkaActor, akkaHttp, akkaSlf4j, javaCompat, sprayWebsocket, upickle)
+
+  val botShared = Seq(upickle)
+
+  val core = shared ++ Seq(
+    actorConcurrent,
+    akkaActor,
+    akkaContrib,
+    amazonaws,
+    awsWrap,
+    caffeine,
+    gcmServer,
+    pushy,
+    jodaTime,
+    postgresJdbc,
+    shardakka,
+    slick,
+    scrImageCore)
 
   val enrich = shared ++ Seq(akkaActor, akkaHttp)
 
   val rpcApi = shared ++ Seq(
-    akkaSlf4j, akkaActor, amazonaws, awsWrap, bcprov, apacheCommonsIo, shapeless
+    akkaSlf4j, akkaActor, amazonaws, awsWrap, bcprov, apacheCommonsIo, shapeless, akkaHttpPlayJson
   )
 
   val httpApi = shared ++ Seq(akkaActor, akkaHttp, akkaHttpPlayJson, jodaTime, playJson)
@@ -125,8 +150,6 @@ object Dependencies {
   val persist = shared ++ Seq(akkaActor, apacheCommonsCodec, postgresJdbc, slick, slickJoda, slickPg, slickTestkit, flywayCore, hikariCP, jodaTime, jodaConvert)
 
   val presences = shared :+ akkaContrib
-
-  val shardakka = shared ++ Seq(akkaActor, akkaContrib, eaioUuid, protobuf)
 
   val sms = shared ++ Seq(akkaActor, akkaHttp, dispatch)
 

@@ -1,19 +1,18 @@
 package im.actor.server.session
 
-import im.actor.server.ActorSpecification
-
-import scala.concurrent.duration._
-import scala.util.Random
-
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-
 import im.actor.api.rpc._
 import im.actor.api.rpc.auth.{ RequestSendAuthCodeObsolete, ResponseSendAuthCodeObsolete }
 import im.actor.api.rpc.codecs.RequestCodec
 import im.actor.api.rpc.contacts.UpdateContactRegistered
+import im.actor.api.rpc.weak.{ UpdateUserOffline, UpdateUserOnline }
+import im.actor.server.ActorSpecification
 import im.actor.server.mtproto.protocol._
-import im.actor.server.sequence.SeqUpdatesManager
+import im.actor.server.sequence.{ SeqUpdatesManager, WeakUpdatesExtension }
+
+import scala.concurrent.duration._
+import scala.util.Random
 
 class SessionResendSpec extends BaseSessionSpec(
   ActorSpecification.createSystem(ConfigFactory.parseString(
@@ -32,8 +31,11 @@ class SessionResendSpec extends BaseSessionSpec(
   it should "resend messages to new client" in Sessions().e2
   it should "not resend messages if ack received within ack-timeout" in Sessions().e3
   it should "resend updates if no ack received within ack-timeout" in Sessions().e4
+  it should "not resend messages when another came with the same reduceKey" in Sessions().reduceKey
 
   case class Sessions() {
+    val weakUpdatesExt = WeakUpdatesExtension(system)
+
     def e1() = {
       implicit val probe = TestProbe()
 
@@ -160,7 +162,7 @@ class SessionResendSpec extends BaseSessionSpec(
       expectMessageAck(authId, sessionId, helloMessageId)
 
       val update = UpdateContactRegistered(1, false, 1L, 2L)
-      SeqUpdatesManager.persistAndPushUpdateF(authId, update, None, isFat = false)
+      SeqUpdatesManager.persistAndPushUpdate(authId, update, None, isFat = false)
       expectSeqUpdate(authId, sessionId, None)
 
       // Still no ack
@@ -170,5 +172,62 @@ class SessionResendSpec extends BaseSessionSpec(
 
       probe.expectNoMsg(6.seconds)
     }
+
+    def reduceKey() = {
+      implicit val probe = TestProbe()
+
+      val authId = createAuthId()
+      val sessionId = Random.nextLong()
+
+      val helloMessageId = Random.nextLong()
+      sendMessageBox(authId, sessionId, sessionRegion.ref, helloMessageId, SessionHello)
+      expectNewSession(authId, sessionId, helloMessageId)
+      expectMessageAck(authId, sessionId, helloMessageId)
+
+      val upd1 = UpdateUserOffline(1)
+      val upd2first = UpdateUserOnline(2)
+      val upd2second = UpdateUserOffline(2)
+      val upd3 = UpdateUserOffline(3)
+
+      weakUpdatesExt.pushUpdate(authId, upd1, Some("reduceKey 1 (uniq)"))
+
+      weakUpdatesExt.pushUpdate(authId, upd2first, Some("reduceKey 2 (same)"))
+      weakUpdatesExt.pushUpdate(authId, upd2second, Some("reduceKey 2 (same)"))
+
+      weakUpdatesExt.pushUpdate(authId, upd3, Some("reduceKey 3 (uniq)"))
+
+      expectUserOffline(authId, sessionId, 1)
+
+      expectUserOnline(authId, sessionId, 2)
+      expectUserOffline(authId, sessionId, 2)
+
+      expectUserOffline(authId, sessionId, 3)
+
+      // No ack
+      probe.expectNoMsg(4.seconds)
+
+      expectUserOffline(authId, sessionId, 1)
+      expectUserOffline(authId, sessionId, 2)
+      expectUserOffline(authId, sessionId, 3)
+
+      // Still no ack
+      probe.expectNoMsg(4.seconds)
+
+      expectUserOffline(authId, sessionId, 1)
+      expectUserOffline(authId, sessionId, 2)
+      expectUserOffline(authId, sessionId, 3)
+    }
+  }
+
+  private def expectUserOnline(authId: Long, sessionId: Long, userId: Int)(implicit probe: TestProbe): Unit = {
+    val weak = expectWeakUpdate(authId, sessionId)
+    weak.updateHeader should ===(UpdateUserOnline.header)
+    UpdateUserOnline.parseFrom(weak.update) shouldBe Right(UpdateUserOnline(userId))
+  }
+
+  private def expectUserOffline(authId: Long, sessionId: Long, userId: Int)(implicit probe: TestProbe): Unit = {
+    val weak = expectWeakUpdate(authId, sessionId)
+    weak.updateHeader should ===(UpdateUserOffline.header)
+    UpdateUserOffline.parseFrom(weak.update) shouldBe Right(UpdateUserOffline(userId))
   }
 }

@@ -1,37 +1,26 @@
 package im.actor.server.session
 
+import akka.actor.{ ActorLogging, Props }
+import akka.stream.actor._
+import im.actor.server.mtproto.protocol.UpdateBox
+import im.actor.server.sequence._
+
 import scala.annotation.tailrec
 import scala.collection.immutable
 
-import akka.actor.{ ActorLogging, Props }
-import akka.stream.actor._
-
-import im.actor.server.mtproto.protocol.{ ProtoMessage, UpdateBox }
-import im.actor.server.presences.{ GroupPresenceManagerRegion, PresenceManagerRegion }
-import im.actor.server.sequence._
-
 private[session] object UpdatesHandler {
-  def props(authId: Long)(
-    implicit
-    seqUpdManagerRegion:        SeqUpdatesManagerRegion,
-    weakUpdManagerRegion:       WeakUpdatesManagerRegion,
-    presenceManagerRegion:      PresenceManagerRegion,
-    groupPresenceManagerRegion: GroupPresenceManagerRegion
-  ): Props = Props(classOf[UpdatesHandler], authId, seqUpdManagerRegion, weakUpdManagerRegion, presenceManagerRegion, groupPresenceManagerRegion)
+  def props(authId: Long)(implicit seqUpdManagerRegion: SeqUpdatesManagerRegion): Props =
+    Props(classOf[UpdatesHandler], authId, seqUpdManagerRegion)
 }
 
-private[session] class UpdatesHandler(authId: Long)(
-  implicit
-  seqUpdManagerRegion:        SeqUpdatesManagerRegion,
-  weakUpdManagerRegion:       WeakUpdatesManagerRegion,
-  presenceManagerRegion:      PresenceManagerRegion,
-  groupPresenceManagerRegion: GroupPresenceManagerRegion
-) extends ActorSubscriber with ActorPublisher[ProtoMessage] with ActorLogging {
+private[session] class UpdatesHandler(authId: Long)(implicit seqUpdManagerRegion: SeqUpdatesManagerRegion)
+  extends ActorSubscriber with ActorPublisher[(UpdateBox, Option[String])] with ActorLogging {
+
   import ActorPublisherMessage._
   import ActorSubscriberMessage._
   import UpdatesConsumerMessage._
 
-  val updatesConsumer = context.actorOf(UpdatesConsumer.props(authId, self), "updatesConsumer")
+  private val updatesConsumer = context.actorOf(UpdatesConsumer.props(authId, self), "updatesConsumer")
 
   def receive = subscriber.orElse(publisher).orElse {
     case unmatched ⇒
@@ -61,19 +50,19 @@ private[session] class UpdatesHandler(authId: Long)(
   override val requestStrategy = WatermarkRequestStrategy(10) // TODO: configurable
 
   // Publisher-related
-  private[this] var messageQueue = immutable.Queue.empty[ProtoMessage]
+  private[this] var messageQueue = immutable.Queue.empty[(UpdateBox, Option[String])]
 
   def publisher: Receive = {
-    case ub: UpdateBox ⇒ enqueueProtoMessage(ub)
-    case Request(_)    ⇒ deliverBuf()
-    case Cancel        ⇒ context.stop(self)
+    case NewUpdate(ub, reduceKey) ⇒ enqueueProtoMessage(ub, reduceKey)
+    case Request(_)               ⇒ deliverBuf()
+    case Cancel                   ⇒ context.stop(self)
   }
 
-  private def enqueueProtoMessage(message: ProtoMessage): Unit = {
+  private def enqueueProtoMessage(message: UpdateBox, reduceKey: Option[String]): Unit = {
     if (messageQueue.isEmpty && totalDemand > 0) {
-      onNext(message)
+      onNext(message → reduceKey)
     } else {
-      messageQueue = messageQueue.enqueue(message)
+      messageQueue = messageQueue.enqueue(message → reduceKey)
       deliverBuf()
     }
   }

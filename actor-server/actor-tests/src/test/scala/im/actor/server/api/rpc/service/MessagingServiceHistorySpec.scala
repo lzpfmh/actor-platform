@@ -10,8 +10,7 @@ import im.actor.api.rpc.peers.{ ApiGroupOutPeer, ApiPeerType }
 import im.actor.server._
 import im.actor.server.acl.ACLUtils
 import im.actor.server.api.rpc.service.groups.{ GroupInviteConfig, GroupsServiceImpl }
-import im.actor.server.group.GroupOffice
-import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
+import im.actor.server.group.GroupExtension
 
 import scala.concurrent.Future
 import scala.util.Random
@@ -19,7 +18,6 @@ import scala.util.Random
 class MessagingServiceHistorySpec extends BaseAppSuite with GroupsServiceHelpers
   with ImplicitFileStorageAdapter
   with ImplicitSessionRegionProxy
-  with ImplicitGroupRegions
   with ImplicitAuthService
   with ImplicitSequenceService
   with SequenceMatchers {
@@ -40,9 +38,6 @@ class MessagingServiceHistorySpec extends BaseAppSuite with GroupsServiceHelpers
   it should "mark messages read and send updates" in s.historyGroup.markRead
 
   it should "Load all history in public groups" in s.public
-
-  implicit private val presenceManagerRegion = PresenceManager.startRegion()
-  implicit private val groupPresenceManagerRegion = GroupPresenceManager.startRegion()
 
   private val groupInviteConfig = GroupInviteConfig("http://actor.im")
 
@@ -165,8 +160,8 @@ class MessagingServiceHistorySpec extends BaseAppSuite with GroupsServiceHelpers
     def public() = {
       val groupId = Random.nextInt
       val (pubUser, pubAuthId, _) = createUser()
-      val accessHash = whenReady(GroupOffice.create(groupId, pubUser.id, pubAuthId, "Public group", Random.nextLong, Set.empty))(_.accessHash)
-      whenReady(GroupOffice.makePublic(groupId, "Public group description"))(identity)
+      val accessHash = whenReady(GroupExtension(system).create(groupId, pubUser.id, pubAuthId, "Public group", Random.nextLong, Set.empty))(_.accessHash)
+      whenReady(GroupExtension(system).makePublic(groupId, "Public group description"))(identity)
 
       val groupOutPeer = ApiGroupOutPeer(groupId, accessHash)
 

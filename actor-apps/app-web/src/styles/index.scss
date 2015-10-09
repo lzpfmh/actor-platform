@@ -2,6 +2,7 @@
 
 @import 'variables';
 @import 'mixins';
+@import 'helpers';
 @import 'fonts';
 
 @import 'app';
@@ -28,3 +29,5 @@
 @import 'banner';
 @import 'icons';
 @import 'dropdown';
+
+@import 'responsive';

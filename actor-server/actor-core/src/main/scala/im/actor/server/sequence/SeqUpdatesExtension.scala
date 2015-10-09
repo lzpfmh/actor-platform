@@ -8,7 +8,7 @@ import slick.driver.PostgresDriver.api._
 
 import scala.concurrent.duration._
 import scala.concurrent.{ Future, Promise }
-import scala.util.{ Failure, Success, Try }
+import scala.util.Try
 
 sealed trait SeqUpdatesExtension extends Extension {
   val region: SeqUpdatesManagerRegion
@@ -43,8 +43,8 @@ object SeqUpdatesExtension extends ExtensionId[SeqUpdatesExtension] with Extensi
 
   override def createExtension(system: ExtendedActorSystem) = {
     val applePushConfig = ApplePushManagerConfig.load(
-      Try(system.settings.config.getConfig("push.apple"))
-        .getOrElse(system.settings.config.getConfig("services.apple.push"))
+      Try(system.settings.config.getConfig("services.apple.push"))
+        .getOrElse(system.settings.config.getConfig("push.apple"))
     )
     val googlePushConfig = GooglePushManagerConfig.load(system.settings.config.getConfig("services.google.push")).get
 

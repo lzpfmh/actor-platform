@@ -1,16 +1,14 @@
 package im.actor.server.enrich
 
-import im.actor.server.acl.ACLUtils
-
 import im.actor.api.rpc.Implicits._
 import im.actor.api.rpc.files.ApiFastThumb
 import im.actor.api.rpc.messaging.{ ApiDocumentExPhoto, ApiDocumentMessage, ApiTextMessage, UpdateMessageContentChanged }
 import im.actor.api.rpc.peers.ApiPeerType
 import im.actor.api.rpc.{ ClientData, peers }
 import im.actor.server._
+import im.actor.server.acl.ACLUtils
 import im.actor.server.api.rpc.service.groups.{ GroupInviteConfig, GroupsServiceImpl }
 import im.actor.server.api.rpc.service.messaging
-import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
 import im.actor.server.social.SocialManager
 
 import scala.util.Random
@@ -19,7 +17,6 @@ class RichMessageWorkerSpec
   extends BaseAppSuite
   with GroupsServiceHelpers
   with MessageParsing
-  with ImplicitGroupRegions
   with ImplicitSessionRegionProxy
   with ImplicitSequenceService
   with SequenceMatchers
@@ -42,8 +39,6 @@ class RichMessageWorkerSpec
 
     implicit val sessionRegion = buildSessionRegionProxy()
     implicit val socialManagerRegion = SocialManager.startRegion()
-    implicit val presenceManagerRegion = PresenceManager.startRegion()
-    implicit val groupPresenceManagerRegion = GroupPresenceManager.startRegion()
 
     val groupInviteConfig = GroupInviteConfig("http://actor.im")
 

@@ -1,35 +1,23 @@
-import _ from 'lodash';
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
 
-import React from 'react';
-
+import React, { Component } from 'react';
 import memoize from 'memoizee';
-import emojify from 'emojify.js';
-import emojiCharacters from 'emoji-named-characters';
+import ActorClient from 'utils/ActorClient';
 
-import Markdown from '../../../utils/Markdown';
+import { Path } from 'constants/ActorAppConstants';
+import { emoji } from 'utils/EmojiUtils';
 
-const inversedEmojiCharacters = _.invert(_.mapValues(emojiCharacters, (e) => e.character));
+const processText = (text) => {
+  const markedText = ActorClient.renderMarkdown(text);
+  let emojifiedText = markedText;
 
-emojify.setConfig({
-  mode: 'img',
-  img_dir: 'assets/img/emoji' // eslint-disable-line
-});
-
-const emojiVariants = _.map(Object.keys(inversedEmojiCharacters), function (name) {
-  return name.replace(/\+/g, '\\+');
-});
-
-const emojiRegexp = new RegExp('(' + emojiVariants.join('|') + ')', 'gi');
-
-const processText = function (text) {
-  let markedText = Markdown.default(text);
-
-  // need hack with replace because of https://github.com/Ranks/emojify.js/issues/127
-  const noPTag = markedText.replace(/<p>/g, '<p> ');
-
-  let emojifiedText = emojify
-    .replace(noPTag.replace(emojiRegexp, (match) => ':' + inversedEmojiCharacters[match] + ':'));
-
+  emoji.include_title = true;
+  emoji.include_text = true;
+  emoji.change_replace_mode('css');
+  emojifiedText = emoji.replace_colons(emojifiedText);
+  emojifiedText = emoji.replace_unified(emojifiedText);
   return emojifiedText;
 };
 
@@ -39,7 +27,7 @@ const memoizedProcessText = memoize(processText, {
   max: 10000
 });
 
-class Text extends React.Component {
+export default class Text extends Component {
   static propTypes = {
     content: React.PropTypes.object.isRequired,
     className: React.PropTypes.string
@@ -52,14 +40,10 @@ class Text extends React.Component {
   render() {
     const { content, className } = this.props;
 
-    const renderedContent = (
-        <div className={className}
-             dangerouslySetInnerHTML={{__html: memoizedProcessText(content.text)}}>
-        </div>
-      );
-
-    return renderedContent;
+    return (
+      <div className={className}
+           dangerouslySetInnerHTML={{__html: memoizedProcessText(content.text)}}>
+      </div>
+    );
   }
 }
-
-export default Text;

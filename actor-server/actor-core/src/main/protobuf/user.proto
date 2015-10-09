@@ -12,6 +12,27 @@ import "scalapb/scalapb.proto";
 import "sequence.proto";
 import "file.proto";
 
+message User {
+    option (scalapb.message).extends = "im.actor.server.office.ProcessorState";
+
+    required int32 id = 1;
+    required string access_salt = 2;
+    required string name = 3;
+    required string country_code = 4;
+    required int32 sex = 5 [(scalapb.field).type = "im.actor.api.rpc.users.ApiSex.ApiSex"];
+    repeated int64 phones = 6;
+    repeated string emails = 7;
+    repeated int64 auth_ids = 8;
+    required bool is_deleted = 9;
+    required bool is_bot = 10;
+    optional string nickname = 11;
+    optional string about = 12;
+    optional Avatar avatar = 13;
+    required int64 created_at = 14;
+    repeated bytes internal_extensions = 15 [(scalapb.field).type = "im.actor.api.rpc.misc.ApiExtension"];
+    optional string external = 16;
+}
+
 message UserCommands {
     message NewAuth {
         option (scalapb.message).extends = "im.actor.server.user.UserCommand";
@@ -36,10 +57,13 @@ message UserCommands {
 
         required int32 user_id = 6;
         required string access_salt = 1;
+        optional string nickname = 9;
         required string name = 2;
         required string country_code = 3;
         required int32 sex = 4 [(scalapb.field).type = "im.actor.api.rpc.users.ApiSex.ApiSex"];
         required bool is_bot = 5;
+        repeated bytes extensions = 7 [(scalapb.field).type = "im.actor.api.rpc.misc.ApiExtension"];
+        optional string external = 8;
     }
 
     message CreateAck {}
@@ -93,32 +117,6 @@ message UserCommands {
         required int32 user_id = 1;
         required int64 access_hash = 2;
         required string name = 3;
-    }
-
-    message DeliverMessage {
-        option (scalapb.message).extends = "im.actor.server.user.UserCommand";
-
-        required int32 user_id = 9;
-        required bytes peer = 8 [(scalapb.field).type = "im.actor.api.rpc.peers.ApiPeer"];
-        required int32 sender_user_id = 1;
-        required int64 random_id = 3;
-        required int64 date = 4 [(scalapb.field).type = "org.joda.time.DateTime"];
-        required bytes message = 5 [(scalapb.field).type = "im.actor.api.rpc.messaging.ApiMessage"];
-        required bool is_fat = 6;
-    }
-
-    message DeliverMessageAck {}
-
-    message DeliverOwnMessage {
-        option (scalapb.message).extends = "im.actor.server.user.UserCommand";
-
-        required int32 user_id = 9;
-        required bytes peer = 8 [(scalapb.field).type = "im.actor.api.rpc.peers.ApiPeer"];
-        required int64 sender_auth_id = 1;
-        required int64 random_id = 3;
-        required int64 date = 4 [(scalapb.field).type = "org.joda.time.DateTime"];
-        required bytes message = 5 [(scalapb.field).type = "im.actor.api.rpc.messaging.ApiMessage"];
-        required bool is_fat = 6;
     }
 
     message BroadcastUpdate {
@@ -227,6 +225,13 @@ message UserQueries {
     message GetAccessHashResponse {
         required int64 access_hash = 1;
     }
+
+    message GetUser {
+        option (scalapb.message).extends = "im.actor.server.user.UserQuery";
+
+        required int32 user_id = 1;
+    }
+
 }
 
 message UserEvents {
@@ -248,10 +253,13 @@ message UserEvents {
         required int32 user_id = 7;
 
         required string access_salt = 1;
+        optional string nickname = 10;
         required string name = 2;
         required string country_code = 3;
         required int32 sex = 5 [(scalapb.field).type = "im.actor.api.rpc.users.ApiSex.ApiSex"];
         required bool is_bot = 6;
+        repeated bytes extensions = 8 [(scalapb.field).type = "im.actor.api.rpc.misc.ApiExtension"];
+        optional string external = 9;
     }
 
     message PhoneAdded {

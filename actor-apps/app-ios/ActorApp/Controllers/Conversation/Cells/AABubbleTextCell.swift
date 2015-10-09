@@ -8,19 +8,18 @@ import UIKit
 class AABubbleTextCell : AABubbleCell, TTTAttributedLabelDelegate {
     
     // TODO: Better max width calculations
-    private static let maxTextWidth: CGFloat = isIPad ? 400 : 210
     
     static let fontSize: CGFloat = isIPad ? 17 : 16
-    static let fontRegular = UIFont.systemFontOfSize(fontSize)
-    static let fontItalic = UIFont.italicSystemFontOfSize(fontSize)
-    static let fontBold = UIFont.boldSystemFontOfSize(fontSize)
+    static let fontRegular = UIFont.textFontOfSize(fontSize)
+    static let fontItalic = UIFont.italicTextFontOfSize(fontSize)
+    static let fontBold = UIFont.boldTextFontOfSize(fontSize)
     
     private static let dateFont = UIFont.italicSystemFontOfSize(11)
     private static let senderFont = UIFont.boldSystemFontOfSize(15)
     
     static let bubbleFont = fontRegular
     static let bubbleFontUnsupported = fontItalic
-    static let senderHeight = CGFloat(22)
+    static let senderHeight = CGFloat(20)
     
     let messageText = TTTAttributedLabel(frame: CGRectZero)
     let statusView = UIImageView();
@@ -42,13 +41,12 @@ class AABubbleTextCell : AABubbleCell, TTTAttributedLabelDelegate {
         messageText.lineBreakMode = .ByWordWrapping
         messageText.numberOfLines = 0
         messageText.userInteractionEnabled = true
-        messageText.enabledTextCheckingTypes = NSTextCheckingType.Link.rawValue
         messageText.delegate = self
         messageText.linkAttributes = [kCTForegroundColorAttributeName: MainAppTheme.chat.autocompleteHighlight,
             kCTUnderlineStyleAttributeName: NSNumber(bool: true)]
         messageText.activeLinkAttributes = [kCTForegroundColorAttributeName: MainAppTheme.chat.autocompleteHighlight,
             kCTUnderlineStyleAttributeName: NSNumber(bool: true)]
-        messageText.verticalAlignment = TTTAttributedLabelVerticalAlignment.Top
+        messageText.verticalAlignment = TTTAttributedLabelVerticalAlignment.Center
         
         dateText.font = AABubbleTextCell.dateFont
         dateText.lineBreakMode = .ByClipping
@@ -97,9 +95,18 @@ class AABubbleTextCell : AABubbleCell, TTTAttributedLabelDelegate {
             // Setting sender name if needed
             if isGroup && !isOut {
                 if let user = Actor.getUserWithUid(message.senderId) {
-                    senderNameLabel.text = user.getNameModel().get()
-                    let color = Resources.placeHolderColors[Int(abs(user.getId())) % Resources.placeHolderColors.count];
-                    senderNameLabel.textColor = color
+                    
+                    if user.isBot() && user.getNameModel().get() == "Bot" {
+                        if let group = Actor.getGroupWithGid(self.peer.peerId) {
+                            senderNameLabel.text = group.getNameModel().get()
+                            let color = Resources.placeHolderColors[Int(abs(group.getId())) % Resources.placeHolderColors.count];
+                            senderNameLabel.textColor = color
+                        }
+                    } else {
+                        senderNameLabel.text = user.getNameModel().get()
+                        let color = Resources.placeHolderColors[Int(abs(user.getId())) % Resources.placeHolderColors.count];
+                        senderNameLabel.textColor = color
+                    }
                 }
                 mainView.addSubview(senderNameLabel)
             } else {
@@ -257,12 +264,28 @@ class AABubbleTextCell : AABubbleCell, TTTAttributedLabelDelegate {
 */
 class TextCellLayout: CellLayout {
     
+    private class func maxTextWidth(isOut: Bool, peer: ACPeer) -> CGFloat {
+        if isIPad {
+            return 400
+        } else {
+            if peer.isGroup {
+                if isOut {
+                    return UIScreen.mainScreen().bounds.width - 110
+                } else {
+                    return UIScreen.mainScreen().bounds.width - 90
+                }
+            } else {
+                return UIScreen.mainScreen().bounds.width - 40
+            }
+        }
+    }
+    
     private static let textKey = "text"
     private static let unsupportedKey = "unsupported"
     
-    private static let stringOutPadding = " " + ("\u{00A0}".repeatString(13));
-    private static let stringInPadding = " " + ("\u{00A0}".repeatString(7));
-    private static let parser = ARMarkdownParser(int: ARMarkdownParser_MODE_LITE)
+    private static let stringOutPadding = " " + ("_".repeatString(7));
+    private static let stringInPadding = " " + ("_".repeatString(4));
+    private static let parser = ARMarkdownParser(int: ARMarkdownParser_MODE_FULL)
     
     var text: String?
     var attrText: NSAttributedString?
@@ -272,7 +295,7 @@ class TextCellLayout: CellLayout {
     var textSizeWithPadding: CGSize
     var textSize: CGSize
     var sources = [String]()
-
+    
     /**
         Plain text layout
     */
@@ -282,12 +305,15 @@ class TextCellLayout: CellLayout {
         self.text = text
         self.textColor = textColor
         
+        // Calculating maximum text width
+        let maxTextWidth = TextCellLayout.maxTextWidth(isOut, peer: peer)
+        
         // Building padded text to make place for date and status checkmark
         let paddedText = (text + (isOut ? TextCellLayout.stringOutPadding : TextCellLayout.stringInPadding))
         
         // Measuring text and padded text heights
-        textSize = UIViewMeasure.measureText(text, width: AABubbleTextCell.maxTextWidth, font: AABubbleTextCell.bubbleFont)
-        textSizeWithPadding = UIViewMeasure.measureText(paddedText, width: AABubbleTextCell.maxTextWidth, font: AABubbleTextCell.bubbleFont)
+        textSize = UIViewMeasure.measureText(text, width: maxTextWidth, font: AABubbleTextCell.bubbleFont)
+        textSizeWithPadding = UIViewMeasure.measureText(paddedText, width: maxTextWidth, font: AABubbleTextCell.bubbleFont)
         
         // Calculating bubble height
         var height = textSizeWithPadding.height + AABubbleCell.bubbleContentTop + AABubbleCell.bubbleContentBottom
@@ -310,12 +336,15 @@ class TextCellLayout: CellLayout {
         self.textColor = textColor
         self.isUnsupported = false
         
+        // Calculating maximum text width
+        let maxTextWidth = TextCellLayout.maxTextWidth(isOut, peer: peer)
+        
         // Building padded text
         let paddedText = attributedText.append(isOut ? TextCellLayout.stringOutPadding : TextCellLayout.stringInPadding, font: AABubbleTextCell.bubbleFont)
         
         // Measuring text and padded text heights
-        textSize = UIViewMeasure.measureText(attributedText, width: AABubbleTextCell.maxTextWidth)
-        textSizeWithPadding = UIViewMeasure.measureText(paddedText, width: AABubbleTextCell.maxTextWidth)
+        textSize = UIViewMeasure.measureText(attributedText, width: maxTextWidth)
+        textSizeWithPadding = UIViewMeasure.measureText(paddedText, width: maxTextWidth)
         
         // Calculating bubble height
         var height = textSizeWithPadding.height + AABubbleCell.bubbleContentTop + AABubbleCell.bubbleContentBottom

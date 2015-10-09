@@ -4,186 +4,214 @@
 
 import UIKit
 
-class GroupViewController: AATableViewController {
+class GroupViewController: ACContentTableController {
     
-    private let GroupInfoCellIdentifier = "GroupInfoCellIdentifier"
-    private let UserCellIdentifier = "UserCellIdentifier"
-    private let CellIdentifier = "CellIdentifier"
+    private let membersSort = { (left: ACGroupMember, right: ACGroupMember) -> Bool in
+        let lname = Actor.getUserWithUid(left.uid).getNameModel().get()
+        let rname = Actor.getUserWithUid(right.uid).getNameModel().get()
+        return lname < rname
+    }
     
-    let gid: Int
-    var group: ACGroupVM?
-    var binder = Binder()
-    
-    private var tableData: UATableData!
-    private var groupMembers: IOSObjectArray?
-    private var groupNameTextField: UITextField?
+    var headerRow: ACAvatarRow!
+    var memberRows: ACManagedArrayRows<ACGroupMember, GroupMemberCell>!
     
     init (gid: Int) {
+        super.init(style: ACContentTableStyle.SettingsPlain)
+        
         self.gid = gid
-        super.init(style: UITableViewStyle.Plain)
+        self.autoTrack = true
+        
+        self.title = localized("ProfileTitle")
     }
 
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // MARK: -
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        view.backgroundColor = MainAppTheme.list.bgColor
-        edgesForExtendedLayout = UIRectEdge.Top
-        automaticallyAdjustsScrollViewInsets = false
-        tableView.separatorStyle = UITableViewCellSeparatorStyle.None
-        tableView.backgroundColor = MainAppTheme.list.backyardColor
-        tableView.clipsToBounds = false
+    override func tableDidLoad() {
 
-        group = Actor.getGroupWithGid(jint(gid))
+        // Header
+        section { (s) -> () in
         
-        tableData = UATableData(tableView: tableView)
-        tableData.registerClass(GroupPhotoCell.self, forCellReuseIdentifier: GroupInfoCellIdentifier)
-        tableData.registerClass(GroupMemberCell.self, forCellReuseIdentifier: UserCellIdentifier)
-        tableData.tableScrollClosure = { (tableView: UITableView) -> () in
-            self.applyScrollUi(tableView)
+            // Header: Avatar
+            self.headerRow = s.avatar { (r) -> () in
+                
+                r.id = self.gid
+                
+                r.bindAction = { (r) -> () in
+                    r.avatar = self.group.getAvatarModel().get()
+                    r.title = self.group.getNameModel().get()
+                }
+                
+                r.avatarDidTap = { (view) -> () in
+                    let avatar = self.group.getAvatarModel().get()
+                    if avatar != nil && avatar.fullImage != nil {
+                        
+                        let full = avatar.fullImage.fileReference
+                        let small = avatar.smallImage.fileReference
+                        let size = CGSize(width: Int(avatar.fullImage.width), height: Int(avatar.fullImage.height))
+                        
+                        self.presentViewController(PhotoPreviewController(file: full, previewFile: small, size: size, fromView: view), animated: true, completion: nil)
+                    }
+                }
+            }
+            
+            // Header: Change photo
+            s.action("GroupSetPhoto") { (r) -> () in
+                r.selectAction = { () -> Bool in
+                    let hasCamera = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
+                    self.showActionSheet( hasCamera ? ["PhotoCamera", "PhotoLibrary"] : ["PhotoLibrary"],
+                        cancelButton: "AlertCancel",
+                        destructButton: self.group.getAvatarModel().get() != nil ? "PhotoRemove" : nil,
+                        sourceView: self.view,
+                        sourceRect: self.view.bounds,
+                        tapClosure: { (index) -> () in
+                            if (index == -2) {
+                                self.confirmUser("PhotoRemoveGroupMessage",
+                                    action: "PhotoRemove",
+                                    cancel: "AlertCancel",
+                                    sourceView: self.view,
+                                    sourceRect: self.view.bounds,
+                                    tapYes: { () -> () in
+                                        Actor.removeGroupAvatarWithGid(jint(self.gid))
+                                })
+                            } else if (index >= 0) {
+                                let takePhoto: Bool = (index == 0) && hasCamera
+                                self.pickAvatar(takePhoto, closure: { (image) -> () in
+                                    Actor.changeGroupAvatar(jint(self.gid), image: image)
+                                })
+                            }
+                    })
+                    
+                    return true
+                }
+            }
+            
+            // Header: Change title
+            s.action("GroupSetTitle") { (r) -> () in
+                r.selectAction = { () -> Bool in
+                    self.startEditField { (c) -> () in
+                        
+                        c.title = "GroupEditHeader"
+                        
+                        c.fieldHint = "GroupEditHint"
+                        
+                        c.actionTitle = "NavigationSave"
+                        
+                        c.initialText = self.group.getNameModel().get()
+                        
+                        c.didDoneTap = { (t, c) -> () in
+                            
+                            if t.length == 0 {
+                                return
+                            }
+
+                            c.executeSafeOnlySuccess(Actor.editGroupTitleCommandWithGid(jint(self.gid), withTitle: t), successBlock: { (val) -> Void in
+                                c.dismiss()
+                            })
+                        }
+                    }
+                    
+                    return true
+                }
+            }
         }
         
-        // Banner
-        tableData.addSection()
-            .addCustomCell { (tableView, indexPath) -> UITableViewCell in
-                var cell = tableView.dequeueReusableCellWithIdentifier(
-                    self.GroupInfoCellIdentifier,
-                    forIndexPath: indexPath)
-                    as! GroupPhotoCell
-            
-                cell.contentView.superview?.clipsToBounds = false
-            
-                cell.selectionStyle = UITableViewCellSelectionStyle.None
-            
-                self.applyScrollUi(tableView, cell: cell)
-            
-                return cell
-            }
-            .setHeight(avatarHeight)
-        
-        // Change Photo
-        let adminSection = tableData.addSection(true)
-            .setFooterHeight(15)
-        
-        adminSection.addActionCell("GroupSetPhoto", actionClosure: { () -> () in
-            let hasCamera = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
-            self.showActionSheet( hasCamera ? ["PhotoCamera", "PhotoLibrary"] : ["PhotoLibrary"],
-                cancelButton: "AlertCancel",
-                destructButton: self.group?.getAvatarModel().get() != nil ? "PhotoRemove" : nil,
-                sourceView: self.view,
-                sourceRect: self.view.bounds,
-                tapClosure: { (index) -> () in
-                    if (index == -2) {
-                        self.confirmUser("PhotoRemoveGroupMessage",
-                            action: "PhotoRemove",
-                            cancel: "AlertCancel",
-                            sourceView: self.view,
-                            sourceRect: self.view.bounds,
-                            tapYes: { () -> () in
-                                Actor.removeGroupAvatarWithGid(jint(self.gid))
-                            })
-                    } else if (index >= 0) {
-                        let takePhoto: Bool = (index == 0) && hasCamera
-                        self.pickAvatar(takePhoto, closure: { (image) -> () in
-                            Actor.changeGroupAvatar(jint(self.gid), image: image)
-                        })
-                    }
-                })
-        })
-        
-        adminSection
-            .addActionCell("GroupSetTitle", actionClosure: { () -> () in
-                self.editName()
-            })
-        
-//        adminSection
-//            .addNavigationCell("GroupIntegrations", actionClosure: { () -> () in
-//                self.navigateNext(IntegrationViewController(gid: jint(self.gid)), removeCurrent: false)
-//            })
-        
         // Notifications
-        tableData.addSection(true)
-            .setHeaderHeight(15)
-            .setFooterHeight(15)
-            .addCommonCell()
-                .setStyle(.Switch)
-                .setContent("GroupNotifications")
-                .setModificator { (cell) -> () in
-                    let groupPeer: ACPeer! = ACPeer.groupWithInt(jint(self.gid))
-                    cell.setSwitcherOn(Actor.isNotificationsEnabledWithPeer(groupPeer))
+        section { (s) -> () in
+            s.common { (r) -> () in
+                let groupPeer: ACPeer! = ACPeer.groupWithInt(jint(self.gid))
                 
-                    cell.switchBlock = { (on: Bool) -> () in
-                        Actor.changeNotificationsEnabledWithPeer(groupPeer, withValue: on)
-                    }
+                r.style = .Switch
+                r.content = localized("GroupNotifications")
+                
+                r.bindAction = { (r) -> () in
+                    r.switchOn = Actor.isNotificationsEnabledWithPeer(groupPeer)
                 }
+                
+                r.switchAction = { (on: Bool) -> () in
+                    Actor.changeNotificationsEnabledWithPeer(groupPeer, withValue: on)
+                }
+            }
+        }
         
         // Members
-        
-        let membersSection = tableData.addSection(true)
-            .setHeaderHeight(15)
-        
-        membersSection
-            .addCustomCells(48, countClosure: { () -> Int in
-            if self.groupMembers != nil {
-                return Int(self.groupMembers!.length())
+        section { (s) -> () in
+            
+            s.autoSeparatorsInset = 65
+            s.autoSeparatorTopOffset = 1
+            s.headerHeight = 0
+            
+            // Members: Header
+            s.header(localized("GroupMembers").uppercaseString)
+            
+            // Members: Add
+            s.action("GroupAddParticipant") { (r) -> () in
+                
+                r.contentInset = 65
+                
+                r.selectAction = { () -> Bool in
+                    let addParticipantController = AddParticipantViewController(gid: self.gid)
+                    let navigationController = AANavigationController(rootViewController: addParticipantController)
+                    if (isIPad) {
+                        navigationController.modalInPopover = true
+                        navigationController.modalPresentationStyle = UIModalPresentationStyle.CurrentContext
+                    }
+                    self.presentViewController(navigationController, animated: true, completion: nil)
+                    return false
+                }
             }
-            return 0
-        }) { (tableView, index, indexPath) -> UITableViewCell in
-            let cell: GroupMemberCell = tableView.dequeueReusableCellWithIdentifier(self.UserCellIdentifier, forIndexPath: indexPath) as! GroupMemberCell
-            if let groupMember = self.groupMembers!.objectAtIndex(UInt(index)) as? ACGroupMember,
-                let user = Actor.getUserWithUid(groupMember.getUid()) {
-                    let username = user.getNameModel().get()
-                    let avatar: ACAvatar? = user.getAvatarModel().get()
-                    cell.userAvatarView.bind(username, id: user.getId(), avatar: avatar)
-                    cell.setUsername(username)
-            }
-            return cell
-        }.setAction { (index) -> () in
-            if let groupMember = self.groupMembers!.objectAtIndex(UInt(index)) as? ACGroupMember, let user = Actor.getUserWithUid(groupMember.getUid()) {
-                if (user.getId() == Actor.myUid()) {
-                    return
+            
+            // Members: List
+            self.memberRows = s.arrays { (r: ACManagedArrayRows<ACGroupMember, GroupMemberCell>) -> () in
+                r.height = 48
+                r.data = self.group.members.get().toArray().toSwiftArray()
+                r.data.sortInPlace(self.membersSort)
+                
+                r.bindData = { (c, d) -> () in
+                    if let user = Actor.getUserWithUid(d.uid) {
+                        c.bind(user, isAdmin: d.isAdministrator)
+                        
+                        // Notify to request onlines
+                        Actor.onUserVisibleWithUid(d.uid)
+                    }
                 }
                 
-                let name = user.getNameModel().get()
-                self.showActionSheet(name,
-                    buttons: isIPhone ? ["GroupMemberInfo", "GroupMemberWrite", "GroupMemberCall"] : ["GroupMemberInfo", "GroupMemberWrite"],
-                    cancelButton: "Cancel",
-                    destructButton: groupMember.getUid() != Actor.myUid() && (groupMember.getInviterUid() == Actor.myUid() || self.group!.getCreatorId() == Actor.myUid())  ? "GroupMemberKick" : nil,
-                    sourceView: self.view,
-                    sourceRect: self.view.bounds,
-                    tapClosure: { (index) -> () in
-                        if (index == -2) {
-                            self.confirmUser(NSLocalizedString("GroupMemberKickMessage", comment: "Button Title").stringByReplacingOccurrencesOfString("{name}", withString: name, options: NSStringCompareOptions(), range: nil),
-                                action: "GroupMemberKickAction",
-                                cancel: "AlertCancel",
-                                sourceView: self.view,
-                                sourceRect: self.view.bounds,
-                                tapYes: { () -> () in
-                                    self.execute(Actor.kickMemberCommandWithGid(jint(self.gid), withUid: user.getId()))
-                                })
-                        } else if (index >= 0) {
-                            if (index == 0) {
+                r.selectAction = { (d) -> Bool in
+                    if let user = Actor.getUserWithUid(d.uid) {
+                        if (user.getId() == Actor.myUid()) {
+                            return true
+                        }
+                        
+                        let name = user.getNameModel().get()
+                        
+                        self.alertSheet { (a: AlertSetting) -> () in
+                            
+                            a.cancel = "AlertCancel"
+                            
+                            a.action("GroupMemberInfo") { () -> () in
                                 self.navigateNext(UserViewController(uid: Int(user.getId())), removeCurrent: false)
-                            } else if (index == 1) {
+                            }
+                         
+                            a.action("GroupMemberWrite") { () -> () in
                                 self.navigateDetail(ConversationViewController(peer: ACPeer.userWithInt(user.getId())))
                                 self.popover?.dismissPopoverAnimated(true)
-                            } else if (index == 2) {
+                            }
+                            
+                            a.action("GroupMemberCall", closure: { () -> () in
                                 let phones = user.getPhonesModel().get()
                                 if phones.size() == 0 {
                                     self.alertUser("GroupMemberCallNoPhones")
                                 } else if phones.size() == 1 {
                                     let number = phones.getWithInt(0)
-                                    UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(number.getPhone())")!)
+                                    UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(number.phone)")!)
                                 } else {
+                                    
                                     var numbers = [String]()
                                     for i in 0..<phones.size() {
                                         let p = phones.getWithInt(i)
-                                        numbers.append("\(p.getTitle()): +\(p.getPhone())")
+                                        numbers.append("\(p.title): +\(p.phone)")
                                     }
                                     self.showActionSheet(numbers,
                                         cancelButton: "AlertCancel",
@@ -191,122 +219,112 @@ class GroupViewController: AATableViewController {
                                         sourceView: self.view,
                                         sourceRect: self.view.bounds,
                                         tapClosure: { (index) -> () in
-                                        if (index >= 0) {
-                                            let number = phones.getWithInt(jint(index))
-                                            UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(number.getPhone())")!)
-                                        }
+                                            if (index >= 0) {
+                                                let number = phones.getWithInt(jint(index))
+                                                UIApplication.sharedApplication().openURL(NSURL(string: "telprompt://+\(number.phone)")!)
+                                            }
                                     })
+                                }
+                            })
+
+                            // Detect if we are admin
+                            let members: [ACGroupMember] = self.group.members.get().toArray().toSwiftArray()
+                            var isAdmin = self.group.creatorId == Actor.myUid()
+                            if !isAdmin {
+                                for m in members {
+                                    if m.uid == Actor.myUid() {
+                                        isAdmin = m.isAdministrator
+                                    }
+                                }
+                            }
+                            
+                            // Can mark as admin
+                            let canMarkAdmin = isAdmin && !d.isAdministrator
+                            
+                            if canMarkAdmin {
+                                a.action("GroupMemberMakeAdmin") { () -> () in
+                                    
+                                    self.confirmDestructive(localized("GroupMemberMakeMessage").replace("{name}", dest: name), action: localized("GroupMemberMakeAction")) {
+
+                                        self.executeSafe(Actor.makeAdminCommandWithGid(jint(self.gid), withUid: jint(user.getId())))
+                                    }
+                                }
+                            }
+                            
+                            // Can kick user
+                            let canKick = isAdmin || d.inviterUid == Actor.myUid()
+                            
+                            if canKick {
+                                a.destructive("GroupMemberKick") { () -> () in       
+                                    self.confirmDestructive(localized("GroupMemberKickMessage")
+                                        .replace("{name}", dest: name), action: localized("GroupMemberKickAction")) {
+
+                                        self.executeSafe(Actor.kickMemberCommandWithGid(jint(self.gid), withUid: user.getId()))
+                                    }
                                 }
                             }
                         }
-                    })
+                    }
+                    
+                    return true
+                }
             }
         }
         
-        // Add member
-        membersSection
-            .setFooterHeight(15)
-            .addActionCell("GroupAddParticipant", actionClosure: { () -> () in
-                let addParticipantController = AddParticipantViewController(gid: self.gid)
-                let navigationController = AANavigationController(rootViewController: addParticipantController)
-                if (isIPad) {
-                    navigationController.modalInPopover = true
-                    navigationController.modalPresentationStyle = UIModalPresentationStyle.CurrentContext
-                }
-                self.presentViewController(navigationController, animated: true, completion: nil)
-            })
-            .setLeftInset(65.0)
-        
         // Leave group
-        tableData.addSection(true)
-            .setFooterHeight(15)
-            .setHeaderHeight(15)
-            .addActionCell("GroupLeave", actionClosure: { () -> () in
-                self.confirmUser("GroupLeaveConfirm", action: "GroupLeaveConfirmAction", cancel: "AlertCancel",
-                    sourceView: self.view,
-                    sourceRect: self.view.bounds,
-                    tapYes: { () -> () in
-                    self.execute(Actor.leaveGroupCommandWithGid(jint(self.gid)))
-                })
+        section { (s) -> () in
+            s.common({ (r) -> () in
+                r.content = localized("GroupLeave")
+                r.style = .DestructiveCentered
+                r.selectAction = { () -> Bool in
+                    
+                    self.confirmDestructive(localized("GroupLeaveConfirm"), action: localized("GroupLeaveConfirmAction"), yes: { () -> () in
+                        self.executeSafe(Actor.leaveGroupCommandWithGid(jint(self.gid)))
+                    })
+                    
+                    return true
+                }
             })
-            .setStyle(.DestructiveCentered)
-        
-        // Init table
-        tableView.reloadData()
+        }
+    }
+    
+    override func tableWillBind(binder: Binder) {
         
         // Bind group info
-        binder.bind(group!.getNameModel()!, closure: { (value: String?) -> () in
-            let cell: GroupPhotoCell? = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? GroupPhotoCell
-            if cell != nil {
-                cell!.setGroupName(value!)
-            }
-            self.title = value!
-        })
         
-        binder.bind(group!.getAvatarModel(), closure: { (value: ACAvatar?) -> () in
-            if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? GroupPhotoCell {
-                if (self.group!.isMemberModel().get().booleanValue()) {
-                    cell.groupAvatarView.bind(self.group!.getNameModel().get(), id: jint(self.gid), avatar: value)
-                } else {
-                    cell.groupAvatarView.bind(self.group!.getNameModel().get(), id: jint(self.gid), avatar: nil)
-                }
-            }
-        })
-
+        binder.bind(group.getNameModel()!) { (value: String?) -> () in
+            self.headerRow.reload()
+        }
+        
+        binder.bind(group.getAvatarModel()) { (value: ACAvatar?) -> () in
+            self.headerRow.reload()
+        }
+        
         // Bind members
-        binder.bind(group!.getMembersModel(), closure: { (value: JavaUtilHashSet?) -> () in
-            if value != nil {
-                self.groupMembers = value!.toArray()
-                
-                self.tableView.reloadData()
+        
+        binder.bind(group.getMembersModel()) { (value: JavaUtilHashSet?) -> () in
+            if let v = value {
+                self.memberRows.data = v.toArray().toSwiftArray()
+                self.memberRows.data.sortInPlace(self.membersSort)
+                self.memberRows.reload()
             }
-        })
-
+        }
+        
         // Bind membership status
-        binder.bind(group!.isMemberModel(), closure: { (member: JavaLangBoolean?) -> () in
-            if member != nil {
-                if Bool(member!.booleanValue()) == true {
+        
+        binder.bind(group.isMemberModel()) { (member: JavaLangBoolean?) -> () in
+            if let m = member {
+                if Bool(m.booleanValue()) == true {
                     self.hidePlaceholder()
                 } else {
                     self.showPlaceholderWithImage(
                         UIImage(named: "contacts_list_placeholder"),
                         title: NSLocalizedString("Placeholder_Group_Title", comment: "Not a member Title"),
                         subtitle: NSLocalizedString("Placeholder_Group_Message", comment: "Message Title"))
-                    
-                    if let cell = self.tableView.cellForRowAtIndexPath(NSIndexPath(forItem: 0, inSection: 0)) as? GroupPhotoCell {
-                        cell.groupAvatarView.bind(self.group!.getNameModel().get(), id: jint(self.gid), avatar: nil)
-                    }
                 }
+            } else {
+                self.hidePlaceholder()
             }
-        })
-    }
-    
-    func editName() {
-        textInputAlert("GroupEditHeader", content: group!.getNameModel().get(), action: "AlertSave") { (nval) -> () in
-            if nval.length > 0 {
-                self.confirmUser("GroupEditConfirm",
-                    action: "GroupEditConfirmAction",
-                    cancel: "AlertCancel",
-                    sourceView: self.view,
-                    sourceRect: self.view.bounds,
-                    tapYes: { () -> () in
-                        self.execute(Actor.editGroupTitleCommandWithGid(jint(self.gid), withTitle: nval));
-                })
-            }
-
         }
-    }
-    
-    override func viewWillDisappear(animated: Bool) {
-        super.viewWillDisappear(animated)
-        
-        navigationController?.navigationBar.lt_reset()
-    }
-    
-    override func viewWillAppear(animated: Bool) {
-        super.viewWillAppear(animated)
-        
-        applyScrollUi(tableView)
-        navigationController?.navigationBar.shadowImage = UIImage()
     }
 }

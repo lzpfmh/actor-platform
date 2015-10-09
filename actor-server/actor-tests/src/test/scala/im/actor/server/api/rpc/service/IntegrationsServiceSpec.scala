@@ -2,20 +2,18 @@ package im.actor.server.api.rpc.service
 
 import im.actor.api.rpc._
 import im.actor.api.rpc.integrtions.ResponseIntegrationToken
-import im.actor.api.rpc.peers.{ ApiUserOutPeer, ApiOutPeer, ApiPeerType }
+import im.actor.api.rpc.peers.{ ApiOutPeer, ApiPeerType, ApiUserOutPeer }
+import im.actor.server._
 import im.actor.server.acl.ACLUtils
 import im.actor.server.api.http.HttpApiConfig
 import im.actor.server.api.rpc.service.groups.{ GroupInviteConfig, GroupsServiceImpl }
 import im.actor.server.api.rpc.service.webhooks.IntegrationServiceHelpers.makeUrl
 import im.actor.server.api.rpc.service.webhooks.IntegrationsServiceImpl
-import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
-import im.actor.server._
 import org.scalatest.Inside._
 
 class IntegrationsServiceSpec
   extends BaseAppSuite
   with GroupsServiceHelpers
-  with ImplicitGroupRegions
   with ImplicitSessionRegionProxy
   with ImplicitAuthService {
   behavior of "IntegrationsService"
@@ -37,15 +35,12 @@ class IntegrationsServiceSpec
     implicit val ec = system.dispatcher
     implicit val sessionRegion = buildSessionRegionProxy()
 
-    implicit val presenceManagerRegion = PresenceManager.startRegion()
-    implicit val groupPresenceManagerRegion = GroupPresenceManager.startRegion()
-
     val groupInviteConfig = GroupInviteConfig("https://actor.im")
 
     implicit val groupsService = new GroupsServiceImpl(groupInviteConfig)
 
     private val config = HttpApiConfig("localhost", 9000, "http", "actor.im", "/dev/null", None)
-    val service = new IntegrationsServiceImpl(config)
+    val service = new IntegrationsServiceImpl(s"${config.scheme}://${config.host}")
 
     val (user1, user1AuthId1, _) = createUser()
     val user1AuthId2 = createAuthId(user1.id)
@@ -122,7 +117,7 @@ class IntegrationsServiceSpec
         inside(resp) {
           case Ok(ResponseIntegrationToken(token, url)) ⇒
             token shouldEqual groupToken
-            url shouldEqual makeUrl(config, groupToken)
+            url shouldEqual makeUrl(s"${config.scheme}://${config.host}", groupToken)
         }
       }
     }
@@ -167,7 +162,7 @@ class IntegrationsServiceSpec
         inside(resp) {
           case Ok(ResponseIntegrationToken(token, url)) ⇒
             token shouldEqual groupToken
-            url shouldEqual makeUrl(config, groupToken)
+            url shouldEqual makeUrl(s"${config.scheme}://${config.host}", groupToken)
         }
       }
 
@@ -178,7 +173,7 @@ class IntegrationsServiceSpec
           inside(resp) {
             case Ok(ResponseIntegrationToken(token, url)) ⇒
               token shouldEqual groupToken
-              url shouldEqual makeUrl(config, groupToken)
+              url shouldEqual makeUrl(s"${config.scheme}://${config.host}", groupToken)
           }
         }
       }

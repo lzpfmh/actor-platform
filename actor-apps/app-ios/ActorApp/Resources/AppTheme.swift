@@ -166,7 +166,8 @@ class AppList {
     
     var textColor : UIColor { get { return UIColor(red: 0, green: 0, blue: 0, alpha: 0xDE/255.0) } }
     var hintColor : UIColor { get { return UIColor(red: 164/255.0, green: 164/255.0, blue: 164/255.0, alpha: 1) } }
-    var sectionColor : UIColor { get { return UIColor(red: 164/255.0, green: 164/255.0, blue: 164/255.0, alpha: 1) } }
+    var sectionColor : UIColor { get { return UIColor.RGB(0x5b5a60) } }
+    var sectionHintColor : UIColor { get { return UIColor.RGB(0x5b5a60) } }
 //     var arrowColor : UIColor { get { return UIColor(red: 0, green: 0, blue: 0, alpha: 0xDE/255.0) } }
     
     var dialogTitle: UIColor { get { return UIColor(red: 0, green: 0, blue: 0, alpha: 0xDE/255.0) } }
@@ -196,8 +197,8 @@ class AppSearchBar {
         // SearchBar Text Color
         let textField = UITextField.my_appearanceWhenContainedIn(UISearchBar.self)
         // textField.tintColor = UIColor.redColor()
-        let font = UIFont(name: "HelveticaNeue", size: 14.0)
-        textField.defaultTextAttributes = [NSFontAttributeName: font!,
+        let font = UIFont.systemFontOfSize(14)
+        textField.defaultTextAttributes = [NSFontAttributeName: font,
                         NSForegroundColorAttributeName : fieldTextColor]
     }
     
@@ -210,6 +211,7 @@ class AppSearchBar {
     }
     
     func styleSearchBar(searchBar: UISearchBar) {
+
         // SearchBar Minimal Style
         searchBar.searchBarStyle = UISearchBarStyle.Default
         // SearchBar Transculent
@@ -229,6 +231,9 @@ class AppSearchBar {
         
         // SearchBar cancel color
         searchBar.tintColor = cancelColor
+        
+        // Apply keyboard color
+        searchBar.keyboardAppearance = MainAppTheme.common.isDarkKeyboard ? UIKeyboardAppearance.Dark : UIKeyboardAppearance.Light
     }
 }
 
@@ -243,8 +248,8 @@ class AppTabBar {
     var selectedIconColor: UIColor { get { return mainColor } }
     var selectedTextColor : UIColor { get { return mainColor } }
     
-    var unselectedIconColor:UIColor { get { return mainColor.alpha(0.56) } }
-    var unselectedTextColor : UIColor { get { return mainColor.alpha(0.56) } }
+    var unselectedIconColor:UIColor { get { return UIColor.RGB(0x929292) } }
+    var unselectedTextColor : UIColor { get { return UIColor.RGB(0x949494) } }
     
     var barShadow : String? { get { return "CardTop2" } }
     
@@ -263,12 +268,12 @@ class AppTabBar {
         // TabBar Background color
         tabBar.barTintColor = backgroundColor;
 
-        // TabBar Shadow
-        if (barShadow != nil) {
-            tabBar.shadowImage = UIImage(named: barShadow!);
-        } else {
-            tabBar.shadowImage = nil
-        }
+//        // TabBar Shadow
+//        if (barShadow != nil) {
+//            tabBar.shadowImage = UIImage(named: barShadow!);
+//        } else {
+//            tabBar.shadowImage = nil
+//        }
         
         let tabBarItem = UITabBarItem.appearance()
         // TabBar Unselected Text

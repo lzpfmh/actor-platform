@@ -49,12 +49,12 @@ import im.actor.messenger.app.util.RandomUtil;
 import im.actor.messenger.app.util.Screen;
 import im.actor.messenger.app.view.AvatarView;
 import im.actor.messenger.app.view.MentionSpan;
-import im.actor.messenger.app.view.SelectionListenerEditText;
 import im.actor.messenger.app.view.TypingDrawable;
 import im.actor.messenger.app.view.emoji.SmileProcessor;
 import im.actor.messenger.app.view.markdown.AndroidMarkdown;
+import im.actor.runtime.mvvm.Value;
 import im.actor.runtime.mvvm.ValueChangedListener;
-import im.actor.runtime.mvvm.ValueModel;
+
 
 import static im.actor.messenger.app.core.Core.groups;
 import static im.actor.messenger.app.core.Core.messenger;
@@ -302,7 +302,6 @@ public class ChatActivity extends ActorEditTextActivity {
             ArrayList<Integer> mention = new ArrayList<Integer>();
             mention.add(shareUser);
             messenger().sendMessage(peer, mentionTitle, "[".concat(mentionTitle).concat("](people://".concat(Integer.toString(shareUser)).concat(")")), mention);
-            messenger().trackTextSend(peer);
             shareUser = 0;
         }
 
@@ -315,7 +314,6 @@ public class ChatActivity extends ActorEditTextActivity {
         if (forwardDocDescriptor != null && !forwardDocDescriptor.isEmpty()) {
             if (forwardDocIsDoc) {
                 messenger().sendDocument(peer, forwardDocDescriptor);
-                messenger().trackDocumentSend(peer);
             } else {
                 execute(messenger().sendUri(peer, Uri.fromFile(new File(forwardDocDescriptor))));
             }
@@ -380,7 +378,7 @@ public class ChatActivity extends ActorEditTextActivity {
             // Binding membership flag to removedFromGroup panel
             bind(messenger().getGroups().get(peer.getPeerId()).isMember(), new ValueChangedListener<Boolean>() {
                 @Override
-                public void onChanged(Boolean val, ValueModel<Boolean> valueModel) {
+                public void onChanged(Boolean val, Value<Boolean> Value) {
                     removedFromGroup.setVisibility(val ? View.GONE : View.VISIBLE);
                 }
             });
@@ -422,7 +420,6 @@ public class ChatActivity extends ActorEditTextActivity {
         }
 
         messenger().sendMessage(peer, rawText);
-        messenger().trackTextSend(peer);
     }
 
     @Override
@@ -506,10 +503,8 @@ public class ChatActivity extends ActorEditTextActivity {
                 }
             } else if (requestCode == REQUEST_PHOTO) {
                 messenger().sendPhoto(peer, pending_fileName);
-                messenger().trackPhotoSend(peer);
             } else if (requestCode == REQUEST_VIDEO) {
                 messenger().sendVideo(peer, pending_fileName);
-                messenger().trackVideoSend(peer);
             } else if (requestCode == REQUEST_DOC) {
                 if (data.getData() != null) {
                     execute(messenger().sendUri(peer, data.getData()), R.string.pick_downloading);
@@ -518,7 +513,6 @@ public class ChatActivity extends ActorEditTextActivity {
                     if (files != null) {
                         for (String s : files) {
                             messenger().sendDocument(peer, s);
-                            messenger().trackDocumentSend(peer);
                         }
                     }
                 }

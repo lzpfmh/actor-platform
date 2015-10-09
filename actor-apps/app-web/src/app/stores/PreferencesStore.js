@@ -1,109 +1,111 @@
-import { EventEmitter } from 'events';
-import ActorAppDispatcher from 'dispatcher/ActorAppDispatcher';
-import { ActionTypes } from 'constants/ActorAppConstants';
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
 
-import { english, russian } from 'l18n';
+import { Store } from 'flux/utils';
+import Dispatcher from 'dispatcher/ActorAppDispatcher';
+import { ActionTypes, AsyncActionStates } from 'constants/ActorAppConstants';
 
-const CHANGE_EVENT = 'change';
+import ActorClient from 'utils/ActorClient';
 
-let _isModalOpen = false,
-    _preferences = {},
-    _sendByEnter = '',
-    _language = '',
-    _languageData = null;
+let _isOpen = false,
+    _languageData = null,
+    _sessions = [],
+    _currentTab = 'GENERAL',
+    _terminateSessionState = [];
 
-class PreferencesStore extends EventEmitter {
-  constructor() {
-    super();
+class PreferencesStore extends Store {
+  isOpen() {
+    return _isOpen;
   }
 
-  emitChange() {
-    this.emit(CHANGE_EVENT);
+  isSendByEnterEnabled() {
+    return ActorClient.isSendByEnterEnabled();
   }
 
-  addChangeListener(callback) {
-    this.on(CHANGE_EVENT, callback);
+  isGroupsNotificationsEnabled() {
+    return ActorClient.isGroupsNotificationsEnabled();
   }
 
-  removeChangeListener(callback) {
-    this.removeListener(CHANGE_EVENT, callback);
+  isOnlyMentionNotifications() {
+    return ActorClient.isOnlyMentionNotifications();
   }
 
-  get isModalOpen() {
-    return _isModalOpen;
+  isSoundEffectsEnabled() {
+    return ActorClient.isSoundEffectsEnabled();
   }
 
-  get preferences() {
-    return _preferences;
+  isShowNotificationsTextEnabled() {
+    return ActorClient.isShowNotificationsTextEnabled();
   }
 
-  get sendByEnter() {
-    return _sendByEnter;
+  getSessions() {
+    return _sessions;
   }
 
-  get language() {
-    return _language;
+  getCurrentTab() {
+    return _currentTab;
   }
 
-  get languageData() {
-    switch (_language) {
-      case 'ru':
-        _languageData = russian;
-        break;
-      //case 'en':
-      //  _languageData = english;
-      //  break;
-      default:
-        _languageData = english;
-        break;
-    }
-
-    return _languageData;
+  getTerminateSessionState(id) {
+    return (_terminateSessionState[id] || AsyncActionStates.PENDING);
   }
+
 
   savePreferences(newPreferences) {
-    localStorage['preferences.SEND_BY_ENTER'] = _sendByEnter = newPreferences.sendByEnter;
-    localStorage['preferences.LANGUAGE'] = _language = newPreferences.language;
+    const {
+      isSendByEnterEnabled,
+      isSoundEffectsEnabled,
+      isGroupsNotificationsEnabled,
+      isOnlyMentionNotifications,
+      isShowNotificationsTextEnabled
+    } = newPreferences;
 
-    _preferences = newPreferences;
+    ActorClient.changeSendByEnter(isSendByEnterEnabled);
+    ActorClient.changeSoundEffectsEnabled(isSoundEffectsEnabled);
+    ActorClient.changeGroupNotificationsEnabled(isGroupsNotificationsEnabled);
+    ActorClient.changeIsOnlyMentionNotifications(isOnlyMentionNotifications);
+    ActorClient.changeIsShowNotificationTextEnabled(isShowNotificationsTextEnabled);
   }
 
-  loadPreferences() {
-    _sendByEnter = localStorage.getItem('preferences.SEND_BY_ENTER') || 'true';
-    _language = localStorage.getItem('preferences.LANGUAGE') || 'en';
+  __onDispatch = (action) => {
+    switch(action.type) {
+      case ActionTypes.PREFERENCES_MODAL_SHOW:
+        _isOpen = true;
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_MODAL_HIDE:
+        _isOpen = false;
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_SAVE:
+        this.savePreferences(action.preferences);
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_SESSION_LOAD_SUCCESS:
+        _sessions = action.response;
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_CHANGE_TAB:
+        _currentTab = action.tab;
+        this.__emitChange();
+        break;
 
-    _preferences = {
-      sendByEnter: _sendByEnter,
-      language: _language
-    };
+      case ActionTypes.PREFERENCES_SESSION_TERMINATE:
+        _terminateSessionState[action.id] = AsyncActionStates.PROCESSING;
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_SESSION_TERMINATE_SUCCESS:
+        delete _terminateSessionState[action.id];
+        this.__emitChange();
+        break;
+      case ActionTypes.PREFERENCES_SESSION_TERMINATE_ERROR:
+        _terminateSessionState[action.id] = AsyncActionStates.FAILURE;
+        this.__emitChange();
+        break;
+
+      default:
+    }
   }
 }
-
-let PreferencesStoreInstance = new PreferencesStore();
-
-PreferencesStoreInstance.dispatchToken = ActorAppDispatcher.register(action => {
-  switch(action.type) {
-    case ActionTypes.PREFERENCES_MODAL_SHOW:
-      _isModalOpen = true;
-      PreferencesStoreInstance.emitChange();
-      break;
-    case ActionTypes.PREFERENCES_MODAL_HIDE:
-      _isModalOpen = false;
-      PreferencesStoreInstance.emitChange();
-      break;
-
-    case ActionTypes.PREFERENCES_SAVE:
-      PreferencesStoreInstance.savePreferences(action.preferences);
-      PreferencesStoreInstance.emitChange();
-      break;
-
-    case ActionTypes.PREFERENCES_LOAD:
-      PreferencesStoreInstance.loadPreferences();
-      PreferencesStoreInstance.emitChange();
-      break;
-    default:
-      return;
-  }
-});
-
-export default PreferencesStoreInstance;
+export default new PreferencesStore(Dispatcher);

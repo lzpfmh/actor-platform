@@ -1,24 +1,20 @@
 package im.actor.server.api.rpc.service
 
-import im.actor.api.rpc.messaging.{ UpdateMessageContentChanged, ApiTextMessage }
-import im.actor.api.rpc.peers.{ ApiPeer, ApiPeerType }
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
 import com.amazonaws.services.s3.transfer.TransferManager
 import com.google.protobuf.CodedInputStream
 import com.typesafe.config.ConfigFactory
-import org.scalatest.Inside._
-import slick.dbio.DBIO
-
 import im.actor.api.rpc._
+import im.actor.api.rpc.messaging.{ ApiTextMessage, UpdateMessageContentChanged }
 import im.actor.api.rpc.misc.ResponseSeq
+import im.actor.api.rpc.peers.{ ApiPeer, ApiPeerType }
 import im.actor.api.rpc.sequence.{ ApiDifferenceUpdate, ResponseGetDifference }
-import im.actor.server.api.rpc.service.sequence.SequenceServiceConfig
-import im.actor.server.presences.PresenceManager
-import im.actor.server.sequence.SeqUpdatesManager
 import im.actor.server._
+import im.actor.server.api.rpc.service.sequence.SequenceServiceConfig
+import im.actor.server.sequence.SeqUpdatesManager
+import org.scalatest.Inside._
+
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, Future }
 
 class SequenceServiceSpec extends BaseAppSuite({
   ActorSpecification.createSystem(
@@ -28,15 +24,13 @@ class SequenceServiceSpec extends BaseAppSuite({
       """
     )
   )
-}) with ImplicitGroupRegions with ImplicitSessionRegionProxy with ImplicitAuthService {
+}) with ImplicitSessionRegionProxy with ImplicitAuthService with ImplicitFileStorageAdapter {
 
   behavior of "Sequence service"
 
   it should "get state" in e1
   it should "get difference" in e2
   it should "get difference if there is one update bigger than difference size limit" in e3
-
-  implicit val presenceManagerRegion = PresenceManager.startRegion()
 
   val bucketName = "actor-uploads-test"
 
@@ -82,7 +76,7 @@ class SequenceServiceSpec extends BaseAppSuite({
     }
     var totalUpdates: Seq[ApiDifferenceUpdate] = Seq.empty
 
-    Await.result(db.run(DBIO.sequence(actions)), 10.seconds)
+    Await.result(Future.sequence(actions), 10.seconds)
 
     val (seq1, state1) = whenReady(service.handleGetDifference(0, Array.empty)) { res ⇒
       val diff = res.toOption.get
@@ -148,9 +142,9 @@ class SequenceServiceSpec extends BaseAppSuite({
     val smallUpdate = UpdateMessageContentChanged(user2Peer, 1L, ApiTextMessage("Hello", Vector.empty, None))
     val bigUpdate = UpdateMessageContentChanged(user2Peer, 2L, ApiTextMessage((for (_ ← 1L to maxSize * 10) yield "b").mkString(""), Vector.empty, None))
 
-    whenReady(persistAndPushUpdateF(authId, smallUpdate, pushText = None, isFat = false))(identity)
-    whenReady(persistAndPushUpdateF(authId, bigUpdate, pushText = None, isFat = false))(identity)
-    whenReady(persistAndPushUpdateF(authId, bigUpdate, pushText = None, isFat = false))(identity)
+    whenReady(persistAndPushUpdate(authId, smallUpdate, pushText = None, isFat = false))(identity)
+    whenReady(persistAndPushUpdate(authId, bigUpdate, pushText = None, isFat = false))(identity)
+    whenReady(persistAndPushUpdate(authId, bigUpdate, pushText = None, isFat = false))(identity)
 
     // expect first small update and needMore == true
     val (seq1, state1) = whenReady(service.handleGetDifference(0, Array.empty)) { res ⇒

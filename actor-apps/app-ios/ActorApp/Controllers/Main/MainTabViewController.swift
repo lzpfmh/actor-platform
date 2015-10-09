@@ -77,13 +77,7 @@ class MainTabViewController : UITabBarController {
                 let dialogsNavigation = AANavigationController(rootViewController: DialogsViewController())
                 let settingsNavigation = AANavigationController(rootViewController: SettingsViewController())
                 
-                if Actor.config.enableCommunity {
-                    let exploreNavigation = AANavigationController(rootViewController: DiscoverViewController())
-                    viewControllers = [contactsNavigation, dialogsNavigation, exploreNavigation, settingsNavigation]
-                } else {
-                    viewControllers = [contactsNavigation, dialogsNavigation, settingsNavigation]
-                }
-                
+                viewControllers = [contactsNavigation, dialogsNavigation, settingsNavigation]
 
                 selectedIndex = 0;
                 selectedIndex = 1;
@@ -131,12 +125,19 @@ class MainTabViewController : UITabBarController {
     
     func showSmsInvitation(phone: String?) {
         if MFMessageComposeViewController.canSendText() {
+
+            // Silently ignore if not configured
+            if AppConfig.appInviteUrl == nil {
+                return
+            }
+            
             let messageComposeController = MFMessageComposeViewController()
             messageComposeController.messageComposeDelegate = self
             if (phone != nil) {
                  messageComposeController.recipients = [phone!]
             }
-            messageComposeController.body = NSLocalizedString("InviteText", comment: "Invite Text")
+            messageComposeController.body = localized("InviteText")
+                .replace("{link}", dest: AppConfig.appInviteUrl!)
             messageComposeController.navigationBar.tintColor = MainAppTheme.navigation.titleColor
             presentViewController(messageComposeController, animated: true, completion: { () -> Void in
                 MainAppTheme.navigation.applyStatusBarFast()

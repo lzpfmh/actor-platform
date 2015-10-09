@@ -6,33 +6,47 @@ import Foundation
 import UIKit
 import MobileCoreServices
 
-class ConversationViewController: ConversationBaseViewController {
+class ConversationViewController: ConversationContentViewController, UIDocumentMenuDelegate, UIDocumentPickerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
-    // MARK: -
-    // MARK: Private vars
+    // Data binder
+    private let binder: Binder = Binder()
     
-    private let BubbleTextIdentifier = "BubbleTextIdentifier"
-    private let BubbleMediaIdentifier = "BubbleMediaIdentifier"
-    private let BubbleDocumentIdentifier = "BubbleDocumentIdentifier"
-    private let BubbleServiceIdentifier = "BubbleServiceIdentifier"
-    private let BubbleBannerIdentifier = "BubbleBannerIdentifier"
+    // Internal state
+    // Members for autocomplete
+    var filteredMembers = [ACMentionFilterResult]()
+    let content: ACPage!
     
-    private let binder: Binder = Binder();
-    
+    // Views
     private let titleView: UILabel = UILabel()
     private let subtitleView: UILabel = UILabel()
     private let navigationView: UIView = UIView()
     private let avatarView = BarAvatarView(frameSize: 36, type: .Rounded)
-    private let backgroundView: UIView = UIView()
+    private let backgroundView = UIImageView()
     
     override init(peer: ACPeer) {
-        super.init(peer: peer);
         
-        // Messages
+        // Data
         
+        self.content = ACAllEvents_Chat_viewWithACPeer_(peer)
+        
+        // Create controller
+        
+        super.init(peer: peer)
+        
+        // Background
+        
+        backgroundView.contentMode = .ScaleAspectFill
         backgroundView.clipsToBounds = true
         backgroundView.backgroundColor = UIColor(
             patternImage:UIImage(named: "bg_foggy_birds")!.tintBgImage(MainAppTheme.bubbles.chatBgTint))
+        
+        // Custom background if available
+        if let bg = Actor.getSelectedWallpaper() {
+            if bg.startsWith("local:") {
+                backgroundView.image = UIImage(named: bg.skip(6))
+            }
+        }
+        
         view.insertSubview(backgroundView, atIndex: 0)
 
         // Text Input
@@ -61,7 +75,7 @@ class ConversationViewController: ConversationBaseViewController {
         navigationView.frame = CGRectMake(0, 0, 200, 44);
         navigationView.autoresizingMask = UIViewAutoresizing.FlexibleWidth;
         
-        titleView.font = UIFont(name: "HelveticaNeue-Medium", size: 17)!
+        titleView.font = UIFont.mediumSystemFontOfSize(17)
         titleView.adjustsFontSizeToFitWidth = false;
         titleView.textColor = Resources.PrimaryLightText
         titleView.textAlignment = NSTextAlignment.Center;
@@ -96,7 +110,13 @@ class ConversationViewController: ConversationBaseViewController {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // MARK: -
+    // Lifecycle
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: UIBarButtonItemStyle.Plain, target: nil, action: nil)
+    }
     
     override func viewWillAppear(animated: Bool) {
         super.viewWillAppear(animated)
@@ -104,8 +124,8 @@ class ConversationViewController: ConversationBaseViewController {
         textView.text = Actor.loadDraftWithPeer(peer)
         
         // Installing bindings
-        if (UInt(peer.getPeerType().ordinal()) == ACPeerType.PRIVATE.rawValue) {
-            let user = Actor.getUserWithUid(peer.getPeerId())
+        if (UInt(peer.peerType.ordinal()) == ACPeerType.PRIVATE.rawValue) {
+            let user = Actor.getUserWithUid(peer.peerId)
             let nameModel = user.getNameModel();
             
             binder.bind(nameModel, closure: { (value: NSString?) -> () in
@@ -116,7 +136,7 @@ class ConversationViewController: ConversationBaseViewController {
                 self.avatarView.bind(user.getNameModel().get(), id: user.getId(), avatar: value)
             })
             
-            binder.bind(Actor.getTypingWithUid(peer.getPeerId())!, valueModel2: user.getPresenceModel()!, closure:{ (typing:JavaLangBoolean?, presence:ACUserPresence?) -> () in
+            binder.bind(Actor.getTypingWithUid(peer.peerId)!, valueModel2: user.getPresenceModel()!, closure:{ (typing:JavaLangBoolean?, presence:ACUserPresence?) -> () in
                 
                 if (typing != nil && typing!.booleanValue()) {
                     self.subtitleView.text = Actor.getFormatter().formatTyping();
@@ -124,7 +144,7 @@ class ConversationViewController: ConversationBaseViewController {
                 } else {
                     let stateText = Actor.getFormatter().formatPresence(presence, withSex: user.getSex())
                     self.subtitleView.text = stateText;
-                    let state = UInt(presence!.getState().ordinal())
+                    let state = UInt(presence!.state.ordinal())
                     if (state == ACUserPresence_State.ONLINE.rawValue) {
                         self.subtitleView.textColor = Resources.PrimaryLightText
                     } else {
@@ -132,8 +152,8 @@ class ConversationViewController: ConversationBaseViewController {
                     }
                 }
             })
-        } else if (UInt(peer.getPeerType().ordinal()) == ACPeerType.GROUP.rawValue) {
-            let group = Actor.getGroupWithGid(peer.getPeerId())
+        } else if (UInt(peer.peerType.ordinal()) == ACPeerType.GROUP.rawValue) {
+            let group = Actor.getGroupWithGid(peer.peerId)
             let nameModel = group.getNameModel()
             
             binder.bind(nameModel, closure: { (value: NSString?) -> () in
@@ -144,13 +164,13 @@ class ConversationViewController: ConversationBaseViewController {
                 self.avatarView.bind(group.getNameModel().get(), id: group.getId(), avatar: value)
             })
             binder.bind(Actor.getGroupTypingWithGid(group.getId())!, valueModel2: group.getMembersModel(), valueModel3: group.getPresenceModel(), closure: { (typingValue:IOSIntArray?, members:JavaUtilHashSet?, onlineCount:JavaLangInteger?) -> () in
-//                if (!group.isMemberModel().get().booleanValue()) {
-//                    self.subtitleView.text = NSLocalizedString("ChatNoGroupAccess", comment: "You is not member")
-//                    self.textInputbar.hidden = true
-//                    return
-//                } else {
-//                    self.textInputbar.hidden = false
-//                }
+                if (!group.isMemberModel().get().booleanValue()) {
+                    self.subtitleView.text = NSLocalizedString("ChatNoGroupAccess", comment: "You is not member")
+                    self.setTextInputbarHidden(true, animated: true)
+                    return
+                } else {
+                    self.setTextInputbarHidden(false, animated: false)
+                }
             
                 if (typingValue != nil && typingValue!.length() > 0) {
                     self.subtitleView.textColor = Resources.PrimaryLightText
@@ -178,6 +198,7 @@ class ConversationViewController: ConversationBaseViewController {
         }
         
         Actor.onConversationOpenWithPeer(peer)
+        Analytics.trackPageVisible(content)
     }
     
     override func viewWillLayoutSubviews() {
@@ -188,23 +209,12 @@ class ConversationViewController: ConversationBaseViewController {
         subtitleView.frame = CGRectMake(0, 22, (navigationView.frame.width - 0), 20)
     }
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        navigationItem.backBarButtonItem = UIBarButtonItem(title: nil, style: UIBarButtonItemStyle.Plain, target: nil, action: nil)
-    }
-    
-    override func viewWillDisappear(animated: Bool) {
-        super.viewWillDisappear(animated)
-        Actor.onConversationClosedWithPeer(peer)
-        
-        (UIApplication.sharedApplication().delegate as! AppDelegate).hideBadge()
-    }
-    
     override func viewDidAppear(animated: Bool) {
         super.viewDidAppear(animated)
         
-        (UIApplication.sharedApplication().delegate as! AppDelegate).showBadge()
+        if !isIPad {
+            (UIApplication.sharedApplication().delegate as! AppDelegate).showBadge()
+        }
         
         if navigationController!.viewControllers.count > 2 {
             let firstController = navigationController!.viewControllers[0]
@@ -213,76 +223,33 @@ class ConversationViewController: ConversationBaseViewController {
         }
     }
     
-//    override func afterLoaded() {
-//        NSLog("afterLoaded")
-//        var sortState = MSG.loadLastReadState(peer)
-//
-//        if (sortState == 0) {
-//            NSLog("lastReadMessage == 0")
-//            return
-//        }
-//        
-//        if (getCount() == 0) {
-//            NSLog("getCount() == 0")
-//            return
-//        }
-//        
-//        var index = -1
-//        unreadMessageId = 0
-//        for var i = getCount() - 1; i >= 0; --i {
-//            var item = objectAtIndex(i) as! AMMessage
-//            if (item.getSortDate() > sortState && item.getSenderId() != MSG.myUid()) {
-//                index = i
-//                unreadMessageId = item.getRid()
-//                break
-//            }
-//        }
-//        
-//        if (index < 0) {
-//            NSLog("Not found")
-//        } else {
-//            NSLog("Founded @\(index)")
-//            // self.tableView.reloadData()
-//            // self.tableView.scrollToRowAtIndexPath(NSIndexPath(forRow: Int(index), inSection: 0), atScrollPosition: UITableViewScrollPosition.Middle, animated: false)
-//        }
-//    }
-    
-    override func viewDidDisappear(animated: Bool) {
-        super.viewDidDisappear(animated);
-        Actor.saveDraftWithPeer(peer, withDraft: textView.text);
-    }
-    
-    // MARK: -
-    // MARK: Methods
-    
-    func longPress(gesture: UILongPressGestureRecognizer) {
-        if gesture.state == UIGestureRecognizerState.Began {
-            let point = gesture.locationInView(self.collectionView)
-            let indexPath = self.collectionView.indexPathForItemAtPoint(point)
-            if indexPath != nil {
-                if let cell = collectionView.cellForItemAtIndexPath(indexPath!) as? AABubbleCell {
-                    if cell.bubble.superview != nil {
-                        var bubbleFrame = cell.bubble.frame
-                        bubbleFrame = collectionView.convertRect(bubbleFrame, fromView: cell.bubble.superview)
-                        if CGRectContainsPoint(bubbleFrame, point) {
-                            // cell.becomeFirstResponder()
-                            let menuController = UIMenuController.sharedMenuController()
-                            menuController.setTargetRect(bubbleFrame, inView:collectionView)
-                            menuController.menuItems = [UIMenuItem(title: "Copy", action: "copy")]
-                            menuController.setMenuVisible(true, animated: true)
-                        }
-                    }
-                }
-            }
+    override func viewWillDisappear(animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        Actor.onConversationClosedWithPeer(peer)
+        Analytics.trackPageHidden(content)
+        
+        if !isIPad {
+            (UIApplication.sharedApplication().delegate as! AppDelegate).hideBadge()
         }
     }
+
+    override func viewDidDisappear(animated: Bool) {
+        super.viewDidDisappear(animated)
+        Actor.saveDraftWithPeer(peer, withDraft: textView.text)
+        
+        // Releasing bindings
+        binder.unbindAll()
+    }
+
+    // Chat avatar tap
     
     func onAvatarTap() {
-        let id = Int(peer.getPeerId())
+        let id = Int(peer.peerId)
         var controller: AAViewController
-        if (UInt(peer.getPeerType().ordinal()) == ACPeerType.PRIVATE.rawValue) {
+        if (UInt(peer.peerType.ordinal()) == ACPeerType.PRIVATE.rawValue) {
             controller = UserViewController(uid: id)
-        } else if (UInt(peer.getPeerType().ordinal()) == ACPeerType.GROUP.rawValue) {
+        } else if (UInt(peer.peerType.ordinal()) == ACPeerType.GROUP.rawValue) {
             controller = GroupViewController(gid: id)
         } else {
             return
@@ -301,6 +268,8 @@ class ConversationViewController: ConversationBaseViewController {
         }
     }
     
+    // Text bar actions
+    
     override func textWillUpdate() {
         super.textWillUpdate();
 
@@ -308,7 +277,6 @@ class ConversationViewController: ConversationBaseViewController {
     }
     
     override func didPressRightButton(sender: AnyObject!) {
-        Actor.trackTextSendWithPeer(peer)
         Actor.sendMessageWithMentionsDetect(peer, withText: textView.text)
         super.didPressRightButton(sender)
     }
@@ -317,79 +285,44 @@ class ConversationViewController: ConversationBaseViewController {
         super.didPressLeftButton(sender)
         
         let hasCamera = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
-        let buttons = hasCamera ? ["PhotoCamera", "PhotoLibrary", "SendDocument"] : ["PhotoLibrary", "SendDocument"]
-        let tapBlock = { (index: Int) -> () in
-            if index == 0 || (hasCamera && index == 1) {
-                let pickerController = AAImagePickerController()
-                pickerController.sourceType = (hasCamera && index == 0) ?
-                    UIImagePickerControllerSourceType.Camera : UIImagePickerControllerSourceType.PhotoLibrary
-                pickerController.mediaTypes = [kUTTypeImage as String]
-                pickerController.view.backgroundColor = MainAppTheme.list.bgColor
-                pickerController.navigationBar.tintColor = MainAppTheme.navigation.barColor
-                pickerController.delegate = self
-                pickerController.navigationBar.tintColor = MainAppTheme.navigation.titleColor
-                pickerController.navigationBar.titleTextAttributes = [NSForegroundColorAttributeName: MainAppTheme.navigation.titleColor]
-                self.presentViewController(pickerController, animated: true, completion: nil)
-            } else if index >= 0 {
-                if #available(iOS 8.0, *) {
-                    let documentPicker = UIDocumentMenuViewController(documentTypes: UTTAll as! [String], inMode: UIDocumentPickerMode.Import)
-                    documentPicker.view.backgroundColor = UIColor.clearColor()
-                    documentPicker.delegate = self
-                    self.presentViewController(documentPicker, animated: true, completion: nil)
-                } else {
-                    // Fallback on earlier versions
-                }
+        
+        let builder = MenuBuilder()
+        
+        if hasCamera {
+            builder.add("PhotoCamera") { () -> () in
+                self.pickImage(.Camera)
             }
         }
         
-        if (isIPad) {
-            showActionSheet(buttons, cancelButton: "AlertCancel", destructButton: nil, sourceView: self.leftButton, sourceRect: self.leftButton.bounds, tapClosure: tapBlock)
+        builder.add("PhotoLibrary") { () -> () in
+            self.pickImage(.PhotoLibrary)
+        }
+        
+        builder.add("SendDocument") { () -> () in
+            self.pickDocument()
+        }
+        
+        if !isIPad {
+            
+            // For iPhone fast action sheet
+            showActionSheetFast(builder.items, cancelButton: "AlertCancel", tapClosure: builder.tapClosure)
         } else {
-            showActionSheetFast(buttons, cancelButton: "AlertCancel", tapClosure: tapBlock)
+            
+            // For iPad use old action sheet
+            showActionSheet(builder.items, cancelButton: "AlertCancel", destructButton: nil, sourceView: self.leftButton, sourceRect: self.leftButton.bounds, tapClosure: builder.tapClosure)
         }
     }
  
-    
-//    override func onItemsAdded(indexes: [Int]) {
-//        var toUpdate = [Int]()
-//        for ind in indexes {
-//            if !indexes.contains(ind + 1) {
-//                if ind + 1 < getCount() {
-//                    toUpdate.append(ind + 1)
-//                }
-//            }
-//            if !indexes.contains(ind - 1) {
-//                if ind > 0 {
-//                    toUpdate.append(ind - 1)
-//                }
-//            }
-//        }
-//        updateRows(toUpdate)
-//    }
-    
-    override func needFullReload(item: AnyObject?, cell: UICollectionViewCell) -> Bool {
-        let message = (item as! ACMessage);
-        if cell is AABubbleTextCell {
-            if (message.content is ACPhotoContent) {
-                return true
-            }
-        }
-        
-        return false
-    }
-    
     // Completition
     
-    var filteredMembers = [ACMentionFilterResult]()
-    
     override func canShowAutoCompletion() -> Bool {
-        if UInt(self.peer.getPeerType().ordinal()) == ACPeerType.GROUP.rawValue {
+        if UInt(self.peer.peerType.ordinal()) == ACPeerType.GROUP.rawValue {
             if self.foundPrefix == "@" {
 
                 let oldCount = filteredMembers.count
                 filteredMembers.removeAll(keepCapacity: true)
                 
-                let res = Actor.findMentionsWithGid(self.peer.getPeerId(), withQuery: self.foundWord)
+                let res = Actor.findMentionsWithGid(self.peer.peerId, withQuery: self.foundWord)
                 for index in 0..<res.size() {
                     filteredMembers.append(res.getWithInt(index) as! ACMentionFilterResult)
                 }
@@ -425,7 +358,7 @@ class ConversationViewController: ConversationBaseViewController {
             postfix = ": "
         }
         
-        acceptAutoCompletionWithString(user.getMentionString() + postfix, keepPrefix: !user.isNickname())
+        acceptAutoCompletionWithString(user.mentionString + postfix, keepPrefix: !user.isNickname)
     }
     
     override func heightForAutoCompletionView() -> CGFloat {
@@ -433,61 +366,75 @@ class ConversationViewController: ConversationBaseViewController {
         return cellHeight * CGFloat(filteredMembers.count)
     }
     
-    override func tableView(tableView: UITableView, willDisplayCell cell: UITableViewCell,
-        forRowAtIndexPath indexPath: NSIndexPath)
-    {
-        // Remove separator inset
-        if cell.respondsToSelector("setSeparatorInset:") {
-            cell.separatorInset = UIEdgeInsetsZero
-        }
-        
-        // Prevent the cell from inheriting the Table View's margin settings
-        if cell.respondsToSelector("setPreservesSuperviewLayoutMargins:") {
-            if #available(iOS 8.0, *) {
-                cell.preservesSuperviewLayoutMargins = false
-            } else {
-                // Fallback on earlier versions
-            }
-        }
-        
-        // Explictly set your cell's layout margins
-        if cell.respondsToSelector("setLayoutMargins:") {
-            if #available(iOS 8.0, *) {
-                cell.layoutMargins = UIEdgeInsetsZero
-            } else {
-                // Fallback on earlier versions
-            }
-        }
+    override func tableView(tableView: UITableView, willDisplayCell cell: UITableViewCell, forRowAtIndexPath indexPath: NSIndexPath) {
+        cell.separatorInset = UIEdgeInsetsZero
+        cell.preservesSuperviewLayoutMargins = false
+        cell.layoutMargins = UIEdgeInsetsZero
     }
-}
-
-// MARK: -
-// MARK: UIDocumentPicker Delegate
-
-extension ConversationViewController: UIDocumentPickerDelegate {
     
-    @available(iOS 8.0, *)
+    // Document picking
+    
+    func pickDocument() {
+        let documentPicker = UIDocumentMenuViewController(documentTypes: UTTAll as! [String], inMode: UIDocumentPickerMode.Import)
+        documentPicker.view.backgroundColor = UIColor.clearColor()
+        documentPicker.delegate = self
+        self.presentViewController(documentPicker, animated: true, completion: nil)
+    }
+    
+    func documentMenu(documentMenu: UIDocumentMenuViewController, didPickDocumentPicker documentPicker: UIDocumentPickerViewController) {
+        documentPicker.delegate = self
+        self.presentViewController(documentPicker, animated: true, completion: nil)
+    }
+    
     func documentPicker(controller: UIDocumentPickerViewController, didPickDocumentAtURL url: NSURL) {
-        let path = url.path!;
+        
+        // Loading path and file name
+        let path = url.path!
         let fileName = url.lastPathComponent
-        let range = path.rangeOfString("/tmp", options: NSStringCompareOptions(), range: nil, locale: nil)
-        let descriptor = path.substringFromIndex(range!.startIndex)
-        NSLog("Picked file: \(descriptor)")
-        Actor.trackDocumentSendWithPeer(peer)
-        Actor.sendDocumentWithPeer(peer, withName: fileName, withMime: "application/octet-stream", withDescriptor: descriptor)
+        
+        // Check if file valid or directory
+        var isDir : ObjCBool = false
+        if !NSFileManager.defaultManager().fileExistsAtPath(path, isDirectory: &isDir) {
+            // Not exists
+            return
+        }
+        
+        // Destination file
+        let descriptor = "/tmp/\(NSUUID().UUIDString)"
+        let destPath = CocoaFiles.pathFromDescriptor(descriptor)
+        
+        if isDir {
+            
+            // Zipping contents and sending
+            execute(Tools.zipDirectoryCommand(path, to: destPath)) { (val) -> Void in
+                Actor.sendDocumentWithPeer(self.peer, withName: fileName, withMime: "application/zip", withDescriptor: descriptor)
+            }
+        } else {
+            
+            // Sending file itself
+            execute(Tools.copyFileCommand(path, to: destPath)) { (val) -> Void in
+                Actor.sendDocumentWithPeer(self.peer, withName: fileName, withMime: "application/octet-stream", withDescriptor: descriptor)
+            }
+        }
     }
     
-}
-
-// MARK: -
-// MARK: UIImagePickerController Delegate
-
-extension ConversationViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    // Image picking
+    
+    func pickImage(source: UIImagePickerControllerSourceType) {
+        let pickerController = AAImagePickerController()
+        pickerController.sourceType = source
+        pickerController.mediaTypes = [kUTTypeImage as String]
+        pickerController.view.backgroundColor = MainAppTheme.list.bgColor
+        pickerController.navigationBar.tintColor = MainAppTheme.navigation.barColor
+        pickerController.delegate = self
+        pickerController.navigationBar.tintColor = MainAppTheme.navigation.titleColor
+        pickerController.navigationBar.titleTextAttributes = [NSForegroundColorAttributeName: MainAppTheme.navigation.titleColor]
+        self.presentViewController(pickerController, animated: true, completion: nil)
+    }
     
     func imagePickerController(picker: UIImagePickerController, didFinishPickingImage image: UIImage, editingInfo: [String : AnyObject]?) {
         MainAppTheme.navigation.applyStatusBar()
         picker.dismissViewControllerAnimated(true, completion: nil)
-        Actor.trackPhotoSendWithPeer(peer)
         Actor.sendUIImage(image, peer: peer)
     }
     
@@ -501,14 +448,5 @@ extension ConversationViewController: UIImagePickerControllerDelegate, UINavigat
     func imagePickerControllerDidCancel(picker: UIImagePickerController) {
         MainAppTheme.navigation.applyStatusBar()
         picker.dismissViewControllerAnimated(true, completion: nil)
-    }
-    
-}
-
-extension ConversationViewController: UIDocumentMenuDelegate {
-    @available(iOS 8.0, *)
-    func documentMenu(documentMenu: UIDocumentMenuViewController, didPickDocumentPicker documentPicker: UIDocumentPickerViewController) {
-        documentPicker.delegate = self
-        self.presentViewController(documentPicker, animated: true, completion: nil)
     }
 }

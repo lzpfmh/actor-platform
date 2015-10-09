@@ -46,7 +46,18 @@ object ACLUtils {
   def authTransactionHash(accessSalt: String)(implicit s: ActorSystem): String =
     DigestUtils.sha1Hex(s"$accessSalt:${secretKey()}")
 
-  def nextAccessSalt(rng: ThreadLocalRandom): String = rng.nextLong().toString
+  def randomHash()(implicit s: ActorSystem): String =
+    DigestUtils.sha1Hex(s"${randomString()}:${secretKey()}")
+
+  def randomLong(): Long = randomLong(ThreadLocalRandom.current())
+
+  def randomLong(rng: ThreadLocalRandom): Long = rng.nextLong()
+
+  def randomString(): String = randomString(ThreadLocalRandom.current())
+
+  def randomString(rng: ThreadLocalRandom): String = rng.nextLong().toString
+
+  def nextAccessSalt(rng: ThreadLocalRandom): String = randomString(rng)
 
   def nextAccessSalt(): String = {
     nextAccessSalt(ThreadLocalRandom.current())
@@ -55,30 +66,21 @@ object ACLUtils {
   def accessToken(rng: ThreadLocalRandom): String = DigestUtils.sha256Hex(rng.nextLong().toString)
 
   def checkOutPeer(outPeer: ApiOutPeer, clientAuthId: Long)(implicit s: ActorSystem): Future[Boolean] = {
-    implicit val ec: ExecutionContext = s.dispatcher
-    implicit val timeout: Timeout = Timeout(20.seconds)
-
     outPeer.`type` match {
       case ApiPeerType.Group ⇒
-        implicit val groupViewRegion: GroupViewRegion = GroupExtension(s).viewRegion
-        GroupOffice.checkAccessHash(outPeer.id, outPeer.accessHash)
+        GroupExtension(s).checkAccessHash(outPeer.id, outPeer.accessHash)
       case ApiPeerType.Private ⇒
-        implicit val userViewRegion: UserViewRegion = UserExtension(s).viewRegion
-        UserOffice.checkAccessHash(outPeer.id, clientAuthId, outPeer.accessHash)
+        UserExtension(s).checkAccessHash(outPeer.id, clientAuthId, outPeer.accessHash)
     }
   }
 
   def getOutPeer(peer: ApiPeer, clientAuthId: Long)(implicit s: ActorSystem): Future[ApiOutPeer] = {
     implicit val ec: ExecutionContext = s.dispatcher
-    implicit val timeout: Timeout = Timeout(20.seconds)
-
     peer.`type` match {
       case ApiPeerType.Group ⇒
-        implicit val groupViewRegion: GroupViewRegion = GroupExtension(s).viewRegion
-        GroupOffice.getAccessHash(peer.id) map (ApiOutPeer(ApiPeerType.Group, peer.id, _))
+        GroupExtension(s).getAccessHash(peer.id) map (ApiOutPeer(ApiPeerType.Group, peer.id, _))
       case ApiPeerType.Private ⇒
-        implicit val userViewRegion: UserViewRegion = UserExtension(s).viewRegion
-        UserOffice.getAccessHash(peer.id, clientAuthId) map (ApiOutPeer(ApiPeerType.Private, peer.id, _))
+        UserExtension(s).getAccessHash(peer.id, clientAuthId) map (ApiOutPeer(ApiPeerType.Private, peer.id, _))
     }
   }
 }

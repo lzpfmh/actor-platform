@@ -4,6 +4,8 @@
 
 package im.actor.core.entity;
 
+import com.google.j2objc.annotations.Property;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,21 +32,29 @@ public class Group extends WrapperEntity<ApiGroup> implements KeyValueItem {
         }
     };
 
+    @Property("readonly, nonatomic")
     private int groupId;
     private long accessHash;
     @NotNull
+    @Property("readonly, nonatomic")
     @SuppressWarnings("NullableProblems")
     private String title;
     @Nullable
+    @Property("readonly, nonatomic")
     private Avatar avatar;
+    @Property("readonly, nonatomic")
     private int creatorId;
+    @Property("readonly, nonatomic")
     private boolean isMember;
     private boolean isHidden;
     @Nullable
+    @Property("readonly, nonatomic")
     private String theme;
     @Nullable
+    @Property("readonly, nonatomic")
     private String about;
     @NotNull
+    @Property("readonly, nonatomic")
     @SuppressWarnings("NullableProblems")
     private List<GroupMember> members;
 
@@ -356,7 +366,7 @@ public class Group extends WrapperEntity<ApiGroup> implements KeyValueItem {
         this.creatorId = wrapped.getCreatorUid();
         this.members = new ArrayList<GroupMember>();
         for (ApiMember m : wrapped.getMembers()) {
-            this.members.add(new GroupMember(m.getUid(), m.getInviterUid(), m.getDate(), m.getUid() == this.creatorId));
+            this.members.add(new GroupMember(m.getUid(), m.getInviterUid(), m.getDate(), m.isAdmin() != null ? m.isAdmin() : m.getUid() == this.creatorId));
         }
         this.isMember = wrapped.isMember();
         this.isHidden = wrapped.isHidden() != null ? wrapped.isHidden() : false;

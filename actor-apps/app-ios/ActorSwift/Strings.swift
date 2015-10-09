@@ -25,6 +25,11 @@ extension String {
         return substringToIndex(startIndex.advancedBy(realCount));
     }
     
+    func skip(count: Int) -> String {
+        let realCount = min(count, length);
+        return substringFromIndex(startIndex.advancedBy(realCount))
+    }
+    
     func strip(set: NSCharacterSet) -> String {
         return componentsSeparatedByCharactersInSet(set).joinWithSeparator("")
     }
@@ -35,6 +40,10 @@ extension String {
     
     func toLong() -> Int64? {
         return NSNumberFormatter().numberFromString(self)?.longLongValue
+    }
+    
+    func toJLong() -> jlong {
+        return jlong(toLong()!)
     }
     
     func smallValue() -> String {
@@ -65,6 +74,14 @@ extension String {
         return self.rangeOfString(text, options: NSStringCompareOptions.CaseInsensitiveSearch, range: nil, locale: nil) != nil
     }
     
+    func startsWith(text: String) -> Bool {
+        var range = rangeOfString(text)
+        if range != nil {
+            return range!.startIndex == startIndex
+        }
+        return false
+    }
+    
     func rangesOfString(text: String) -> [Range<String.Index>] {
         var res = [Range<String.Index>]()
         
@@ -91,6 +108,22 @@ extension String {
     }
     
     var asNS: NSString { return (self as NSString) }
+    
+    func encodeText(key: Int32) -> String {
+        var res = ""
+        for i in 0..<length {
+            res += String(
+                Character(
+                UnicodeScalar(
+                    UInt32(
+                        Int32(
+                            (self[i] as String).unicodeScalars.first!.value) + key
+                    ))
+                )
+            )
+        }
+        return res
+    }
 }
 
 extension NSAttributedString {
@@ -107,7 +140,7 @@ extension NSAttributedString {
     }
     
     convenience init(string: String, font: UIFont) {
-        self.init(string: string)
+        self.init(string: string, attributes: [NSFontAttributeName: font])
     }
 }
 

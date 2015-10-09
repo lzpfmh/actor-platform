@@ -10,15 +10,17 @@ import im.actor.api.rpc.users.ApiUser
 import im.actor.api.rpc.weak.{ UpdateGroupOnline, UpdateUserLastSeen, UpdateUserOffline, UpdateUserOnline }
 import im.actor.api.rpc.{ Update, UpdateBox ⇒ ProtoUpdateBox }
 import im.actor.server.db.DbExtension
-import im.actor.server.group.{ GroupExtension, GroupOffice, GroupViewRegion }
+import im.actor.server.group.GroupExtension
 import im.actor.server.mtproto.protocol.UpdateBox
 import im.actor.server.persist
 import im.actor.server.presences._
-import im.actor.server.user.{ UserExtension, UserOffice, UserViewRegion }
+import im.actor.server.user.UserExtension
 import org.joda.time.DateTime
 
 import scala.concurrent._
 import scala.concurrent.duration._
+
+final case class NewUpdate(ub: UpdateBox, reduceKey: Option[String])
 
 trait UpdatesConsumerMessage
 
@@ -45,32 +47,11 @@ object UpdatesConsumerMessage {
 }
 
 object UpdatesConsumer {
-  def props(authId: Long, session: ActorRef)(
-    implicit
-    weakUpdatesManagerRegion:   WeakUpdatesManagerRegion,
-    presenceManagerRegion:      PresenceManagerRegion,
-    groupPresenceManagerRegion: GroupPresenceManagerRegion
-  ) =
-    Props(
-      classOf[UpdatesConsumer],
-      authId,
-      session,
-      weakUpdatesManagerRegion,
-      presenceManagerRegion,
-      groupPresenceManagerRegion
-    )
+  def props(authId: Long, session: ActorRef) =
+    Props(classOf[UpdatesConsumer], authId, session)
 }
 
-private[sequence] class UpdatesConsumer(
-  authId:     Long,
-  subscriber: ActorRef
-)(
-  implicit
-  weakUpdatesManagerRegion:   WeakUpdatesManagerRegion,
-  presenceManagerRegion:      PresenceManagerRegion,
-  groupPresenceManagerRegion: GroupPresenceManagerRegion
-)
-  extends Actor with ActorLogging with Stash {
+private[sequence] class UpdatesConsumer(authId: Long, subscriber: ActorRef) extends Actor with ActorLogging with Stash {
 
   import Presences._
   import UpdatesConsumerMessage._
@@ -78,6 +59,9 @@ private[sequence] class UpdatesConsumer(
   implicit val ec: ExecutionContext = context.dispatcher
   implicit val system: ActorSystem = context.system
   implicit val timeout: Timeout = Timeout(5.seconds) // TODO: configurable
+  private val presenceExt = PresenceExtension(system)
+  private val groupRresenceExt = GroupPresenceExtension(system)
+  private val weakUpdatesExt = WeakUpdatesExtension(system)
 
   private implicit val seqUpdExt: SeqUpdatesExtension = SeqUpdatesExtension(context.system)
   private var lastDateTime = new DateTime
@@ -96,14 +80,14 @@ private[sequence] class UpdatesConsumer(
           log.error(e, "Failed to subscribe to sequence updates")
       }
     case SubscribeToWeak ⇒
-      WeakUpdatesManager.subscribe(authId, self) onFailure {
+      weakUpdatesExt.subscribe(authId, self) onFailure {
         case e ⇒
           self ! SubscribeToWeak
           log.error(e, "Failed to subscribe to weak updates")
       }
     case cmd @ SubscribeToUserPresences(userIds) ⇒
       userIds foreach { userId ⇒
-        PresenceManager.subscribe(userId, self) onFailure {
+        presenceExt.subscribe(userId, self) onFailure {
           case e ⇒
             self ! cmd
             log.error(e, "Failed to subscribe to user presences")
@@ -111,7 +95,7 @@ private[sequence] class UpdatesConsumer(
       }
     case cmd @ UnsubscribeFromUserPresences(userIds) ⇒
       userIds foreach { userId ⇒
-        PresenceManager.unsubscribe(userId, self) onFailure {
+        presenceExt.unsubscribe(userId, self) onFailure {
           case e ⇒
             self ! cmd
             log.error(e, "Failed to subscribe from user presences")
@@ -119,7 +103,7 @@ private[sequence] class UpdatesConsumer(
       }
     case cmd @ SubscribeToGroupPresences(groupIds) ⇒
       groupIds foreach { groupId ⇒
-        GroupPresenceManager.subscribe(groupId, self) onFailure {
+        groupRresenceExt.subscribe(groupId, self) onFailure {
           case e ⇒
             self ! cmd
             log.error(e, "Failed to subscribe to group presences")
@@ -127,7 +111,7 @@ private[sequence] class UpdatesConsumer(
       }
     case cmd @ UnsubscribeFromGroupPresences(groupIds) ⇒
       groupIds foreach { groupId ⇒
-        GroupPresenceManager.unsubscribe(groupId, self) onFailure {
+        groupRresenceExt.unsubscribe(groupId, self) onFailure {
           case e ⇒
             self ! cmd
             log.error(e, "Failed to unsubscribe from group presences")
@@ -149,10 +133,10 @@ private[sequence] class UpdatesConsumer(
               case None ⇒
                 throw new Exception(s"Cannot find userId for authId ${authId}")
             }
-        }) foreach (sendUpdateBox)
+        }) foreach (sendUpdateBox(_, None))
       }
-    case WeakUpdatesManager.UpdateReceived(updateBox) ⇒
-      sendUpdateBox(updateBox)
+    case WeakUpdatesManager.UpdateReceived(updateBox, reduceKey) ⇒
+      sendUpdateBox(updateBox, reduceKey)
     case PresenceState(userId, presence, lastSeenAt) ⇒
       val update: Update =
         presence match {
@@ -170,14 +154,16 @@ private[sequence] class UpdatesConsumer(
       log.debug("Pushing presence {}", update)
 
       val updateBox = WeakUpdate(nextDateTime().getMillis, update.header, update.toByteArray)
-      sendUpdateBox(updateBox)
+      val reduceKey = weakUpdatesExt.reduceKeyUser(update.header, userId)
+      sendUpdateBox(updateBox, Some(reduceKey))
     case GroupPresenceState(groupId, onlineCount) ⇒
       val update = UpdateGroupOnline(groupId, onlineCount)
 
       log.debug("Pushing presence {}", update)
 
       val updateBox = WeakUpdate(nextDateTime().getMillis, update.header, update.toByteArray)
-      sendUpdateBox(updateBox)
+      val reduceKey = weakUpdatesExt.reduceKeyGroup(update.header, groupId)
+      sendUpdateBox(updateBox, Some(reduceKey))
   }
 
   private def nextDateTime(): DateTime = {
@@ -192,25 +178,18 @@ private[sequence] class UpdatesConsumer(
     this.lastDateTime
   }
 
-  private def sendUpdateBox(updateBox: ProtoUpdateBox): Unit = {
-    subscriber ! UpdateBox(UpdateBoxCodec.encode(updateBox).require)
-  }
+  private def sendUpdateBox(updateBox: ProtoUpdateBox, reduceKey: Option[String]): Unit =
+    subscriber ! NewUpdate(UpdateBox(UpdateBoxCodec.encode(updateBox).require), reduceKey)
 
   private def getFatData(
     userId:      Int,
     fatUserIds:  Seq[Int],
     fatGroupIds: Seq[Int]
-  )(
-    implicit
-    ec: ExecutionContext
-  ): Future[(Seq[ApiUser], Seq[ApiGroup])] = {
-    implicit lazy val userViewRegion: UserViewRegion = UserExtension(system).viewRegion
-    implicit lazy val groupViewRegion: GroupViewRegion = GroupExtension(system).viewRegion
-
+  )(implicit ec: ExecutionContext): Future[(Seq[ApiUser], Seq[ApiGroup])] = {
     for {
-      groups ← Future.sequence(fatGroupIds map (GroupOffice.getApiStruct(_, userId)))
+      groups ← Future.sequence(fatGroupIds map (GroupExtension(system).getApiStruct(_, userId)))
       groupMemberIds = groups.view.map(_.members.map(_.userId)).flatten
-      users ← Future.sequence((fatUserIds ++ groupMemberIds).distinct map (UserOffice.getApiStruct(_, userId, authId)))
+      users ← Future.sequence((fatUserIds ++ groupMemberIds).distinct map (UserExtension(system).getApiStruct(_, userId, authId)))
     } yield (users, groups)
   }
 }

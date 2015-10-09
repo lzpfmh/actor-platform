@@ -30,6 +30,8 @@ export default {
     sourceMapFilename: '[name].map'
   },
   resolve: {
+    packageAlias: false,
+    modulesDirectories: ['node_modules'],
     root: [
       path.join(__dirname, 'src/app')
     ]
@@ -61,8 +63,7 @@ export default {
         test: /\.js$/,
         loaders: [
           'react-hot',
-          'babel?optional[]=strict' +
-            '&optional[]=es7.classProperties' +
+          'babel?optional[]=es7.classProperties' +
             '&optional[]=es7.decorators'
         ],
         exclude: /(node_modules)/

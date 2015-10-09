@@ -1,6 +1,10 @@
-import React from 'react';
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
 
-import {PeerTypes} from 'constants/ActorAppConstants';
+import React, { Component } from 'react';
+
+import { PeerTypes } from 'constants/ActorAppConstants';
 
 import requireAuth from 'utils/require-auth';
 import ActorClient from 'utils/ActorClient';
@@ -15,17 +19,7 @@ import DialogSection from 'components/DialogSection.react';
 import Banner from 'components/common/Banner.react';
 import Favicon from 'components/common/Favicon.react';
 
-const visibilitychange = 'visibilitychange';
-
-const onVisibilityChange = () => {
-  if (!document.hidden) {
-    VisibilityActionCreators.createAppVisible();
-  } else {
-    VisibilityActionCreators.createAppHidden();
-  }
-};
-
-class Main extends React.Component {
+class Main extends Component {
   static contextTypes = {
     router: React.PropTypes.func
   };
@@ -37,13 +31,14 @@ class Main extends React.Component {
   constructor(props) {
     super(props);
 
-    document.addEventListener(visibilitychange, onVisibilityChange);
+    const { params } = props;
+    const peer = PeerUtils.stringToPeer(params.id);
+
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
 
     if (!document.hidden) {
       VisibilityActionCreators.createAppVisible();
     }
-
-    const peer = PeerUtils.stringToPeer(this.props.params.id);
 
     if (peer) {
       // It is needed to prevent failure on opening dialog while library didn't load dialogs (right after auth)
@@ -63,8 +58,17 @@ class Main extends React.Component {
     }
   }
 
+  onVisibilityChange = () => {
+    if (!document.hidden) {
+      VisibilityActionCreators.createAppVisible();
+    } else {
+      VisibilityActionCreators.createAppHidden();
+    }
+  };
+
   render() {
-    const peer = PeerUtils.stringToPeer(this.props.params.id);
+    const { params } = this.props;
+    const peer = PeerUtils.stringToPeer(params.id);
 
     return (
       <div className="app">
@@ -72,7 +76,6 @@ class Main extends React.Component {
         <Banner/>
         <SidebarSection selectedPeer={peer}/>
         <DialogSection peer={peer}/>
-
       </div>
     );
   }

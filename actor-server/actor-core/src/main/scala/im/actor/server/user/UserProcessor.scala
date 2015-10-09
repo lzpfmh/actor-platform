@@ -1,27 +1,20 @@
 package im.actor.server.user
 
-import im.actor.serialization.ActorSerializer
-
-import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
-
 import akka.actor._
 import akka.contrib.pattern.ShardRegion
 import akka.persistence.{ RecoveryCompleted, RecoveryFailure }
 import akka.util.Timeout
-import com.github.benmanes.caffeine.cache.Cache
+import im.actor.serialization.ActorSerializer
+import im.actor.server.db.DbExtension
+import im.actor.server.event.TSEvent
+import im.actor.server.office.{ PeerProcessor, StopOffice }
+import im.actor.server.sequence.SeqUpdatesExtension
+import im.actor.server.social.{ SocialExtension, SocialManagerRegion }
 import org.joda.time.DateTime
 import slick.driver.PostgresDriver.api._
 
-import im.actor.api.rpc.users.ApiSex
-import im.actor.server.db.DbExtension
-import im.actor.server.event.TSEvent
-import im.actor.server.file.Avatar
-import im.actor.server.office.{ ProcessorState, PeerProcessor, StopOffice }
-import im.actor.server.sequence.SeqUpdatesExtension
-import im.actor.server.sequence.SeqStateDate
-import im.actor.server.social.{ SocialExtension, SocialManagerRegion }
-import im.actor.util.cache.CacheHelpers._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 trait UserEvent
 
@@ -33,24 +26,7 @@ trait UserQuery {
   val userId: Int
 }
 
-private[user] case class User(
-  id:          Int,
-  accessSalt:  String,
-  name:        String,
-  countryCode: String,
-  sex:         ApiSex.ApiSex,
-  phones:      Seq[Long],
-  emails:      Seq[String],
-  authIds:     Set[Long],
-  isDeleted:   Boolean,
-  isBot:       Boolean,
-  nickname:    Option[String],
-  about:       Option[String],
-  avatar:      Option[Avatar],
-  createdAt:   DateTime
-) extends ProcessorState
-
-private[user] object User {
+private[user] object UserBuilder {
   def apply(ts: DateTime, e: UserEvents.Created): User =
     User(
       id = e.userId,
@@ -60,13 +36,15 @@ private[user] object User {
       sex = e.sex,
       phones = Seq.empty[Long],
       emails = Seq.empty[String],
-      authIds = Set.empty[Long],
+      authIds = Seq.empty[Long],
       isDeleted = false,
       isBot = e.isBot,
-      nickname = None,
+      nickname = e.nickname,
       about = None,
       avatar = None,
-      createdAt = ts
+      createdAt = ts.getMillis,
+      internalExtensions = e.extensions,
+      external = e.external
     )
 }
 
@@ -83,8 +61,6 @@ object UserProcessor {
       10012 → classOf[UserCommands.ChangeName],
       10013 → classOf[UserCommands.CreateAck],
       10014 → classOf[UserCommands.ChangeCountryCode],
-      10015 → classOf[UserCommands.DeliverMessage],
-      10016 → classOf[UserCommands.DeliverOwnMessage],
       10017 → classOf[UserCommands.RemoveAuthAck],
       10018 → classOf[UserCommands.DeleteAck],
       10019 → classOf[UserCommands.AddPhone],
@@ -96,7 +72,6 @@ object UserProcessor {
       10025 → classOf[UserCommands.ChangeAbout],
       10026 → classOf[UserCommands.UpdateAvatar],
       10027 → classOf[UserCommands.UpdateAvatarAck],
-      10028 → classOf[UserCommands.DeliverMessageAck],
 
       11001 → classOf[UserQueries.GetAuthIds],
       11002 → classOf[UserQueries.GetAuthIdsResponse],
@@ -119,7 +94,9 @@ object UserProcessor {
       12010 → classOf[UserEvents.EmailAdded],
       12011 → classOf[UserEvents.NicknameChanged],
       12012 → classOf[UserEvents.AboutChanged],
-      12013 → classOf[UserEvents.AvatarUpdated]
+      12013 → classOf[UserEvents.AvatarUpdated],
+
+      13000 → classOf[User]
     )
 
   def props: Props =
@@ -133,34 +110,31 @@ private[user] final class UserProcessor
   with ActorLogging {
 
   import UserCommands._
-  import UserOffice._
   import UserQueries._
-
-  private val MaxCacheSize = 100L
-
-  protected implicit val db: Database = DbExtension(context.system).db
-  protected implicit val seqUpdatesExt: SeqUpdatesExtension = SeqUpdatesExtension(context.system)
-  protected implicit val region: UserProcessorRegion = UserProcessorRegion.get(context.system)
-  protected implicit val viewRegion: UserViewRegion = UserViewRegion(context.parent)
-  protected implicit val socialRegion: SocialManagerRegion = SocialExtension(context.system).region
-
-  protected implicit val timeout: Timeout = Timeout(10.seconds)
 
   protected implicit val system: ActorSystem = context.system
   protected implicit val ec: ExecutionContext = context.dispatcher
 
+  protected val db: Database = DbExtension(system).db
+  protected val userExt = UserExtension(system)
+  protected implicit val seqUpdatesExt: SeqUpdatesExtension = SeqUpdatesExtension(system)
+  protected implicit val socialRegion: SocialManagerRegion = SocialExtension(system).region
+
+  protected implicit val timeout: Timeout = Timeout(10.seconds)
+
   protected val userId = self.path.name.toInt
 
-  override def persistenceId = persistenceIdFor(userId)
+  override def persistenceId = UserOffice.persistenceIdFor(userId)
 
   context.setReceiveTimeout(1.hour)
 
   override def updatedState(evt: TSEvent, state: User): User = {
     evt match {
       case TSEvent(_, UserEvents.AuthAdded(authId)) ⇒
-        state.copy(authIds = state.authIds + authId)
+        val updAuthIds = if (state.authIds contains authId) state.authIds else state.authIds :+ authId
+        state.copy(authIds = updAuthIds)
       case TSEvent(_, UserEvents.AuthRemoved(authId)) ⇒
-        state.copy(authIds = state.authIds - authId)
+        state.copy(authIds = state.authIds filterNot (_ == authId))
       case TSEvent(_, UserEvents.CountryCodeChanged(countryCode)) ⇒
         state.copy(countryCode = countryCode)
       case TSEvent(_, UserEvents.NameChanged(name)) ⇒
@@ -182,22 +156,18 @@ private[user] final class UserProcessor
   }
 
   override protected def handleInitCommand: Receive = {
-    case Create(_, accessSalt, name, countryCode, sex, isBot) ⇒
-      create(accessSalt, name, countryCode, sex, isBot)
+    case Create(_, accessSalt, nickName, name, countryCode, sex, isBot, extensions, external) ⇒
+      create(accessSalt, nickName, name, countryCode, sex, isBot, extensions, external)
   }
 
   override protected def handleCommand(state: User): Receive = {
-    case NewAuth(_, authId)                ⇒ addAuth(state, authId)
-    case RemoveAuth(_, authId)             ⇒ removeAuth(state, authId)
-    case ChangeCountryCode(_, countryCode) ⇒ changeCountryCode(state, countryCode)
-    case ChangeName(_, name, clientAuthId) ⇒ changeName(state, name, clientAuthId)
-    case Delete(_)                         ⇒ delete(state)
-    case AddPhone(_, phone)                ⇒ addPhone(state, phone)
-    case AddEmail(_, email)                ⇒ addEmail(state, email)
-    case DeliverMessage(_, peer, senderUserId, randomId, date, message, isFat) ⇒
-      deliverMessage(state, peer, senderUserId, randomId, date, message, isFat)
-    case DeliverOwnMessage(_, peer, senderAuthId, randomId, date, message, isFat) ⇒
-      deliverOwnMessage(state, peer, senderAuthId, randomId, date, message, isFat)
+    case NewAuth(_, authId)                        ⇒ addAuth(state, authId)
+    case RemoveAuth(_, authId)                     ⇒ removeAuth(state, authId)
+    case ChangeCountryCode(_, countryCode)         ⇒ changeCountryCode(state, countryCode)
+    case ChangeName(_, name, clientAuthId)         ⇒ changeName(state, name, clientAuthId)
+    case Delete(_)                                 ⇒ delete(state)
+    case AddPhone(_, phone)                        ⇒ addPhone(state, phone)
+    case AddEmail(_, email)                        ⇒ addEmail(state, email)
     case ChangeNickname(_, clientAuthId, nickname) ⇒ changeNickname(state, clientAuthId, nickname)
     case ChangeAbout(_, clientAuthId, about)       ⇒ changeAbout(state, clientAuthId, about)
     case UpdateAvatar(_, clientAuthId, avatarOpt)  ⇒ updateAvatar(state, clientAuthId, avatarOpt)
@@ -211,13 +181,14 @@ private[user] final class UserProcessor
     case GetContactRecords(_)                         ⇒ getContactRecords(state)
     case CheckAccessHash(_, senderAuthId, accessHash) ⇒ checkAccessHash(state, senderAuthId, accessHash)
     case GetAccessHash(_, clientAuthId)               ⇒ getAccessHash(state, clientAuthId)
+    case GetUser(_)                                   ⇒ getUser(state)
   }
 
   protected[this] var userStateMaybe: Option[User] = None
 
   override def receiveRecover: Receive = {
     case TSEvent(ts, evt: UserEvents.Created) ⇒
-      userStateMaybe = Some(User(ts, evt))
+      userStateMaybe = Some(UserBuilder(ts, evt))
     case evt: TSEvent ⇒
       userStateMaybe = userStateMaybe map (updatedState(evt, _))
     case RecoveryFailure(e) ⇒

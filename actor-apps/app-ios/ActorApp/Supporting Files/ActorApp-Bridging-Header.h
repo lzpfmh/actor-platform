@@ -11,6 +11,7 @@
 // Cocoa Pods
 #import <FMDB/FMDB.h>
 #import <CocoaAsyncSocket/GCDAsyncSocket.h>
+#import <ZipZap/ZipZap.h>
 
 #import "SLKTextViewController.h"
 #import <LTNavigationBar/UINavigationBar+Awesome.h>
@@ -21,6 +22,7 @@
 #import <M13ProgressSuite/UINavigationController+M13ProgressViewBar.h>
 #import <NYTPhotoViewer/NYTPhotosViewController.h>
 #import <NYTPhotoViewer/NYTPhoto.h>
+#import <SZTextView/SZTextView.h>
 
 #import <pop/Pop.h>
 #import <VBFPopFlatButton/VBFPopFlatButton.h>
@@ -32,10 +34,9 @@
 #import <UIActionSheet+Blocks/UIActionSheet+Blocks.h>
 #import <UIAlertController+Blocks/UIAlertController+Blocks.h>
 
-//#import <SplunkMint-iOS/SplunkMint-iOS.h>
 #import <HockeySDK/HockeySDK.h>
 #import <AddressBook/AddressBook.h>
-//#import <Mixpanel/Mixpanel.h>
+// #import <Mixpanel/Mixpanel.h>
 
 // ObjC classes
 #import "ABActionShit.h"

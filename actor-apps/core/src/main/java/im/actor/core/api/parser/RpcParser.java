@@ -21,6 +21,7 @@ public class RpcParser extends BaseParser<RpcScope> {
     public RpcScope read(int type, byte[] payload) throws IOException {
         switch(type) {
             case 191: return RequestStartPhoneAuth.fromBytes(payload);
+            case 197: return RequestSendCodeByPhoneCall.fromBytes(payload);
             case 185: return RequestStartEmailAuth.fromBytes(payload);
             case 189: return RequestValidateCode.fromBytes(payload);
             case 194: return RequestGetOAuth2Params.fromBytes(payload);
@@ -77,17 +78,10 @@ public class RpcParser extends BaseParser<RpcScope> {
             case 97: return RequestGetFileUploadUrl.fromBytes(payload);
             case 122: return RequestCommitFileUpload.fromBytes(payload);
             case 142: return RequestGetFileUploadPartUrl.fromBytes(payload);
-            case 130: return RequestInitVoxSupport.fromBytes(payload);
-            case 131: return RequestGetVoxUser.fromBytes(payload);
-            case 163: return RequestInitLlectro.fromBytes(payload);
-            case 152: return RequestGetAvailableInterests.fromBytes(payload);
-            case 157: return RequestEnableInterests.fromBytes(payload);
-            case 158: return RequestDisableInterests.fromBytes(payload);
-            case 162: return RequestNotifyBannerView.fromBytes(payload);
-            case 166: return RequestNotifyBannerClick.fromBytes(payload);
-            case 164: return RequestGetBalance.fromBytes(payload);
             case 134: return RequestGetParameters.fromBytes(payload);
             case 128: return RequestEditParameter.fromBytes(payload);
+            case 243: return RequestStoreEvents.fromBytes(payload);
+            case 241: return RequestLoadWallpappers.fromBytes(payload);
             case 51: return RequestRegisterGooglePush.fromBytes(payload);
             case 76: return RequestRegisterApplePush.fromBytes(payload);
             case 52: return RequestUnregisterPush.fromBytes(payload);
@@ -97,6 +91,8 @@ public class RpcParser extends BaseParser<RpcScope> {
             case 33: return RequestSubscribeFromOnline.fromBytes(payload);
             case 74: return RequestSubscribeToGroupOnline.fromBytes(payload);
             case 75: return RequestSubscribeFromGroupOnline.fromBytes(payload);
+            case 116: return RequestInitWebaction.fromBytes(payload);
+            case 123: return RequestCompleteWebaction.fromBytes(payload);
             case 193: return ResponseStartPhoneAuth.fromBytes(payload);
             case 186: return ResponseStartEmailAuth.fromBytes(payload);
             case 195: return ResponseGetOAuth2Params.fromBytes(payload);
@@ -121,16 +117,15 @@ public class RpcParser extends BaseParser<RpcScope> {
             case 121: return ResponseGetFileUploadUrl.fromBytes(payload);
             case 138: return ResponseCommitFileUpload.fromBytes(payload);
             case 141: return ResponseGetFileUploadPartUrl.fromBytes(payload);
-            case 129: return ResponseInitVoxSupport.fromBytes(payload);
-            case 132: return ResponseGetVoxUser.fromBytes(payload);
-            case 153: return ResponseGetAvailableInterests.fromBytes(payload);
-            case 165: return ResponseGetBalance.fromBytes(payload);
             case 135: return ResponseGetParameters.fromBytes(payload);
+            case 242: return ResponseLoadWallpappers.fromBytes(payload);
             case 12: return ResponseGetDifference.fromBytes(payload);
             case 50: return ResponseVoid.fromBytes(payload);
             case 72: return ResponseSeq.fromBytes(payload);
             case 102: return ResponseSeqDate.fromBytes(payload);
             case 209: return ResponseBool.fromBytes(payload);
+            case 117: return ResponseInitWebaction.fromBytes(payload);
+            case 124: return ResponseCompleteWebaction.fromBytes(payload);
             case 13: return SeqUpdate.fromBytes(payload);
             case 73: return FatSeqUpdate.fromBytes(payload);
             case 26: return WeakUpdate.fromBytes(payload);

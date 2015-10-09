@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
+
 .sidebar {
   position: relative;
 
@@ -18,22 +22,21 @@
       padding: 2px 14px;
 
       .avatar {
-        margin: 16px 10px 16px 0;
+        margin: 18px 10px 18px 0;
       }
 
       &__name {
         font-size: 16px;
         font-weight: 500;
-        line-height: 32px;
+        line-height: 22px;
 
-        overflow-x: hidden;
-
-        margin: 14px 0;
+        margin: 19px 0;
 
         vertical-align: middle;
-        text-overflow: ellipsis;
 
         color: white;
+
+        @include text-elipsis();
       }
       .dropdown__button {
         width: 24px;
@@ -43,7 +46,7 @@
         transition: transform $default-transition-duration $default-transition-timing;
         vertical-align: middle;
 
-        color: rgba(255,255,255,.65);
+        color: rgba(255, 255, 255, .65);
       }
     }
 
@@ -56,20 +59,19 @@
       }
     }
     .dropdown__menu {
-      min-width: 230px;
-      margin-top: 15px;
-      margin-right: -30px;
+      min-width: 255px;
+      margin-right: -67px;
     }
 
     &:hover {
       //background-color: rgba($baby-blue,.2);
-      background-color: rgba($baby-blue,.12);
+      background-color: rgba($baby-blue, .12);
     }
     &--clickable {
       cursor: pointer;
     }
     &--opened {
-      background-color: rgba($baby-blue,.2) !important;
+      background-color: rgba($baby-blue, .2) !important;
       .dropdown__button {
         transform: scale(1, -1);
 
@@ -112,7 +114,7 @@
           text-decoration: none;
           text-transform: uppercase;
 
-          color: rgba(255,255,255,.75);
+          color: rgba(255, 255, 255, .75);
           &:hover {
             color: white;
           }
@@ -171,6 +173,7 @@
       padding: 7px 14px;
 
       cursor: pointer;
+      vertical-align: middle;
       //transition: color $default-transition-duration $default-transition-timing;
 
       color: rgba(white, .6);
@@ -183,10 +186,11 @@
         filter: saturate(.4) contrast(.6);
       }
       .title {
-        overflow: hidden;
-
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        @include text-elipsis();
+        .emoji-outer {
+          width: 20px;
+          height: 20px;
+        }
       }
       .counter {
         font-size: 14px;
@@ -207,13 +211,34 @@
         border-radius: 12px;
         background-color: $coral;
       }
+      .delete {
+        font-size: 18px;
+        line-height: 24px;
+
+        display: none;
+
+        margin-right: 3px;
+        margin-left: 6px;
+
+        color: rgba(white, .6);
+        &:hover {
+          color: white;
+        }
+      }
+
       &:hover {
         color: white;
-        background-color: rgba($baby-blue,.12);
+        background-color: rgba($baby-blue, .12);
         box-shadow: none;
         .avatar {
           filter: none;
         }
+        //.counter {
+        //  display: none;
+        //}
+        //.delete {
+        //  display: block;
+        //}
       }
       &--active {
         color: white;

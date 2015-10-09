@@ -111,6 +111,10 @@ class AvatarView: UIImageView {
         image = nil
         if (fileName != nil) {
             image = UIImage(contentsOfFile: CocoaFiles.pathFromDescriptor(fileName!))
+            
+            if (image != nil && self.avatarType == .Rounded) {
+                image = image!.roundImage(self.frameSize)
+            }
         }
         
         if (image == nil) {
@@ -133,9 +137,9 @@ class AvatarView: UIImageView {
         
         var fileLocation: ACFileReference?
         if needSmallAvatar == true {
-            fileLocation = avatar?.getSmallImage()?.getFileReference();
+            fileLocation = avatar?.smallImage?.fileReference
         } else {
-            fileLocation = avatar?.getFullImage()?.getFileReference();
+            fileLocation = avatar?.smallImage?.fileReference
         }
         
         if (bindedId != nil && bindedId == id) {
@@ -170,29 +174,15 @@ class AvatarView: UIImageView {
         self.bindedTitle = title
         
         if (fileLocation == nil) {
-            self.image = nil
+            
+            requestId++
             
             if (self.placeholderImage == nil) {
-                requestId++
-                let callbackRequestId = requestId
-                let placeholderTitle = title
-                let placeholderId = bindedId
-                dispatchBackground {
-                    if (callbackRequestId != self.requestId) {
-                        return;
-                    }
-                    
-                    let image = Placeholders.avatarPlaceholder(placeholderId, size: self.frameSize, title: placeholderTitle, rounded: self.avatarType == .Rounded)
-                    
-                    dispatchOnUi { () -> Void in
-                        if (callbackRequestId != self.requestId) {
-                            return;
-                        }
-                        
-                        self.image = image
-                    }
-                }                
+                self.placeholderImage = Placeholders.avatarPlaceholder(bindedId, size: self.frameSize, title: title, rounded: self.avatarType == .Rounded)
+                self.image = self.placeholderImage
             }
+            
+            self.image = self.placeholderImage
             
             return
         }
@@ -206,7 +196,7 @@ class AvatarView: UIImageView {
         }
         
         if needSmallAvatar == false {
-            let smallFileLocation = avatar?.getSmallImage()?.getFileReference()
+            let smallFileLocation = avatar?.smallImage?.fileReference
             var smallAvatarCached = checkCache(40, id: Int64(smallFileLocation!.getFileId()))
             if smallAvatarCached == nil {
                 smallAvatarCached = checkCache(48, id: Int64(smallFileLocation!.getFileId()))

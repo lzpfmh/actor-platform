@@ -1,25 +1,28 @@
-import polyfills from 'utils/polyfills'; // eslint-disable-line
+/*
+ * Copyright (C) 2015 Actor LLC. <https://actor.im>
+ */
+
+import 'babel/polyfill';
 import RouterContainer from 'utils/RouterContainer';
 
 import crosstab from 'crosstab';
 
-import React from 'react';
+import React, { Component } from 'react';
 import Router from 'react-router';
-import Raven from 'utils/Raven'; // eslint-disable-line
-import isMobile from 'utils/IsMobile';
 import ReactMixin from 'react-mixin';
 
-import Intl from 'intl'; // eslint-disable-line
-import LocaleData from 'intl/locale-data/jsonp/en-US'; // eslint-disable-line
+import { intlData } from 'l18n';
 import { IntlMixin } from 'react-intl';
 
-import injectTapEventPlugin from 'react-tap-event-plugin';
+import Raven from 'utils/Raven'; // eslint-disable-line
+import isMobile from 'utils/IsMobile';
+
+import { endpoints } from 'constants/ActorAppConstants'
+
+import LoginActionCreators from 'actions/LoginActionCreators';
 
 import LoginStore from 'stores/LoginStore';
 import PreferencesStore from 'stores/PreferencesStore';
-
-import LoginActionCreators from 'actions/LoginActionCreators';
-import PreferencesActionCreators from 'actions/PreferencesActionCreators';
 
 import Deactivated from 'components/Deactivated.react';
 import Login from 'components/Login.react';
@@ -28,6 +31,7 @@ import JoinGroup from 'components/JoinGroup.react';
 import Install from 'components/Install.react';
 //import AppCache from 'utils/AppCache'; // eslint-disable-line
 
+// Loading progress
 import Pace from 'pace';
 Pace.start({
   ajax: false,
@@ -35,9 +39,11 @@ Pace.start({
   restartOnPushState: false
 });
 
-const DefaultRoute = Router.DefaultRoute;
-const Route = Router.Route;
-const RouteHandler = Router.RouteHandler;
+// Preload emoji spritesheet
+import { preloadEmojiSheet } from 'utils/EmojiUtils'
+preloadEmojiSheet();
+
+const { DefaultRoute, Route, RouteHandler } = Router;
 
 const ActorInitEvent = 'concurrentActorInit';
 
@@ -59,20 +65,15 @@ if (isMobile() && window.location.hash !== '#/install') {
 }
 
 @ReactMixin.decorate(IntlMixin)
-class App extends React.Component {
+class App extends Component {
   render() {
     return <RouteHandler/>;
   }
 }
 
-// Internationalisation
-let intlData;
-PreferencesStore.addChangeListener(() => {
-  intlData = PreferencesStore.languageData;
-});
-PreferencesActionCreators.load();
-
 const initReact = () => {
+  const appRootElemet = document.getElementById('actor-web-app');
+
   if (window.location.hash !== '#/deactivated') {
     if (crosstab.supported) {
       crosstab.broadcast(ActorInitEvent, {});
@@ -81,7 +82,7 @@ const initReact = () => {
     if (location.pathname === '/app/index.html') {
       window.messenger = new window.actor.ActorApp(['ws://' + location.hostname + ':9080/']);
     } else {
-      window.messenger = new window.actor.ActorApp();
+      window.messenger = new window.actor.ActorApp(endpoints);
     }
   }
 
@@ -100,10 +101,7 @@ const initReact = () => {
 
   RouterContainer.set(router);
 
-  router.run((Root) => {
-    injectTapEventPlugin();
-    React.render(<Root {...intlData}/>, document.getElementById('actor-web-app'));
-  });
+  router.run((Root) => React.render(<Root {...intlData}/>, appRootElemet));
 
   if (window.location.hash !== '#/deactivated') {
     if (LoginStore.isLoggedIn()) {
@@ -112,6 +110,4 @@ const initReact = () => {
   }
 };
 
-window.jsAppLoaded = () => {
-  setTimeout(initReact, 0);
-};
+window.jsAppLoaded = () => setTimeout(initReact, 0);

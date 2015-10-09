@@ -43,6 +43,7 @@ import im.actor.runtime.actors.ActorRef;
 import im.actor.runtime.actors.Props;
 import im.actor.runtime.android.AndroidContext;
 import im.actor.runtime.generic.mvvm.BindedDisplayList;
+import im.actor.runtime.mvvm.Value;
 import im.actor.runtime.mvvm.ValueChangedListener;
 import im.actor.runtime.mvvm.ValueModel;
 import me.leolin.shortcutbadger.ShortcutBadger;
@@ -137,10 +138,16 @@ public class AndroidMessenger extends im.actor.core.Messenger {
 
         modules.getAppStateModule().getAppStateVM().getGlobalCounter().subscribe(new ValueChangedListener<Integer>() {
             @Override
-            public void onChanged(Integer val, ValueModel<Integer> valueModel) {
+            public void onChanged(Integer val, Value<Integer> valueModel) {
                 ShortcutBadger.with(AndroidContext.getContext()).count(val);
             }
         });
+//        modules.getAppStateModule().getAppStateVM().getGlobalCounter().subscribe(new ValueChangedListener<Integer>() {
+//            @Override
+//            public void onChanged(Integer val, ValueModel<Integer> valueModel) {
+//                ShortcutBadger.with(AndroidContext.getContext()).count(val);
+//            }
+//        });
     }
 
     public Context getContext() {
@@ -327,13 +334,13 @@ public class AndroidMessenger extends im.actor.core.Messenger {
 
                         if (mimeType.startsWith("video/")) {
                             sendVideo(peer, picturePath, fileName);
-                            trackVideoSend(peer);
+//                            trackVideoSend(peer);
                         } else if (mimeType.startsWith("image/")) {
                             sendPhoto(peer, picturePath, new File(fileName).getName());
-                            trackPhotoSend(peer);
+//                            trackPhotoSend(peer);
                         } else {
                             sendDocument(peer, picturePath, new File(fileName).getName());
-                            trackDocumentSend(peer);
+//                            trackDocumentSend(peer);
                         }
 
                         callback.onResult(true);

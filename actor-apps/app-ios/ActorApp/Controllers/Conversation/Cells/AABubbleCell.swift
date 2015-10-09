@@ -120,7 +120,7 @@ class AABubbleCell: UICollectionViewCell {
     
     // Binded data
     var peer: ACPeer!
-    var controller: ConversationBaseViewController!
+    var controller: ConversationContentViewController!
     var isGroup: Bool = false
     var isFullSize: Bool!
     var bindedSetting: CellSetting?
@@ -140,12 +140,12 @@ class AABubbleCell: UICollectionViewCell {
         self.isFullSize = isFullSize
   
         dateBg.image = AABubbleCell.dateBgImage
-        dateText.font = UIFont(name: "HelveticaNeue-Medium", size: 12)!
+        dateText.font = UIFont.mediumSystemFontOfSize(12)
         dateText.textColor = UIColor.whiteColor()
         dateText.contentMode = UIViewContentMode.Center
         dateText.textAlignment = NSTextAlignment.Center
         
-        newMessage.font = UIFont(name: "HelveticaNeue-Medium", size: 14)!
+        newMessage.font = UIFont.mediumSystemFontOfSize(14)
         newMessage.textColor = UIColor.whiteColor()
         newMessage.contentMode = UIViewContentMode.Center
         newMessage.textAlignment = NSTextAlignment.Center
@@ -180,10 +180,10 @@ class AABubbleCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func setConfig(peer: ACPeer, controller: ConversationBaseViewController) {
+    func setConfig(peer: ACPeer, controller: ConversationContentViewController) {
         self.peer = peer
         self.controller = controller
-        if (peer.getPeerType().ordinal() == jint(ACPeerType.GROUP.rawValue) && !isFullSize) {
+        if (peer.isGroup && !isFullSize) {
             self.isGroup = true
         }
     }
@@ -200,7 +200,7 @@ class AABubbleCell: UICollectionViewCell {
     }
     
     override func delete(sender: AnyObject?) {
-        var rids = IOSLongArray(length: 1)
+        let rids = IOSLongArray(length: 1)
         rids.replaceLongAtIndex(0, withLong: bindedMessage!.rid)
         Actor.deleteMessagesWithPeer(self.peer, withRids: rids)
     }
@@ -226,9 +226,20 @@ class AABubbleCell: UICollectionViewCell {
             if (!isFullSize) {
                 if (!isOut && isGroup) {
                     if let user = Actor.getUserWithUid(message.senderId) {
-                        let avatar: ACAvatar? = user.getAvatarModel().get()
-                        let name = user.getNameModel().get()
-                        avatarView.bind(name, id: user.getId(), avatar: avatar)
+                        
+                        // Small hack for replacing senter name and title
+                        // with current group title
+                        if user.isBot() && user.getNameModel().get() == "Bot" {
+                            if let group = Actor.getGroupWithGid(self.peer.peerId) {
+                                let avatar: ACAvatar? = group.getAvatarModel().get()
+                                let name = group.getNameModel().get()
+                                avatarView.bind(name, id: user.getId(), avatar: avatar)
+                            }
+                        } else {
+                            let avatar: ACAvatar? = user.getAvatarModel().get()
+                            let name = user.getNameModel().get()
+                            avatarView.bind(name, id: user.getId(), avatar: avatar)
+                        }
                     }
                     if !avatarAdded {
                         mainView.addSubview(avatarView)
@@ -297,8 +308,6 @@ class AABubbleCell: UICollectionViewCell {
                 bubble.image = AABubbleCell.cachedServiceBg
                 bubbleBorder.image = nil
             break
-            default:
-            break
         }
     }
     
@@ -318,7 +327,7 @@ class AABubbleCell: UICollectionViewCell {
         UIView.performWithoutAnimation { () -> Void in
             let endPadding: CGFloat = 32
             let startPadding: CGFloat = (!self.isOut && self.isGroup) ? AABubbleCell.avatarPadding : 0
-            var cellMaxWidth = self.contentView.frame.size.width - endPadding - startPadding
+            let cellMaxWidth = self.contentView.frame.size.width - endPadding - startPadding
             self.layoutContent(cellMaxWidth, offsetX: startPadding)
             self.layoutAnchor()
             if (!self.isOut && self.isGroup && !self.isFullSize) {
@@ -367,7 +376,6 @@ class AABubbleCell: UICollectionViewCell {
     
     func layoutBubble(contentWidth: CGFloat, contentHeight: CGFloat) {
         let fullWidth = contentView.bounds.width
-        let fullHeight = contentView.bounds.height
         let bubbleW = contentWidth + contentInsets.left + contentInsets.right
         let bubbleH = contentHeight + contentInsets.top + contentInsets.bottom
         var topOffset = CGFloat(0)

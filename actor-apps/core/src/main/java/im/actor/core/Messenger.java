@@ -21,6 +21,7 @@ import im.actor.core.entity.Peer;
 import im.actor.core.entity.PublicGroup;
 import im.actor.core.entity.Sex;
 import im.actor.core.entity.User;
+import im.actor.core.entity.WebActionDescriptor;
 import im.actor.core.entity.content.FastThumb;
 import im.actor.core.i18n.I18nEngine;
 import im.actor.core.modules.ModuleContext;
@@ -32,6 +33,7 @@ import im.actor.core.modules.events.PeerChatClosed;
 import im.actor.core.modules.events.PeerChatOpened;
 import im.actor.core.modules.events.PeerInfoClosed;
 import im.actor.core.modules.events.PeerInfoOpened;
+import im.actor.core.modules.events.UserVisible;
 import im.actor.core.network.NetworkState;
 import im.actor.core.network.parser.Request;
 import im.actor.core.network.parser.Response;
@@ -118,7 +120,7 @@ public class Messenger {
      * @return Command for execution
      */
     @NotNull
-    @ObjectiveCName("requestStartEmailAuthCommandWithEmail:")
+    @ObjectiveCName("requestStartAuthCommandWithEmail:")
     public Command<AuthState> requestStartEmailAuth(final String email) {
         return modules.getAuthModule().requestStartEmailAuth(email);
     }
@@ -130,7 +132,7 @@ public class Messenger {
      * @return Command for execution
      */
     @NotNull
-    @ObjectiveCName("requestStartPhoneAuthCommandWithEmail:")
+    @ObjectiveCName("requestStartAuthCommandWithPhone:")
     public Command<AuthState> requestStartPhoneAuth(final long phone) {
         return modules.getAuthModule().requestStartPhoneAuth(phone);
     }
@@ -159,13 +161,24 @@ public class Messenger {
     }
 
     /**
+     * Request phone call activation
+     *
+     * @return command for execution
+     */
+    @NotNull
+    @ObjectiveCName("requestPhoneCall")
+    public Command<Boolean> requestPhoneCall() {
+        return modules.getAuthModule().requestCallActivation();
+    }
+
+    /**
      * Sending activation code
      *
      * @param code activation code
      * @return Command for execution
      */
     @NotNull
-    @ObjectiveCName("validateCodeCommandWithCode:")
+    @ObjectiveCName("validateCodeCommand:")
     public Command<AuthState> validateCode(final String code) {
         return modules.getAuthModule().requestValidateCode(code);
     }
@@ -421,6 +434,16 @@ public class Messenger {
     @ObjectiveCName("onProfileOpenWithUid:")
     public void onProfileOpen(int uid) {
         modules.getEvents().post(new PeerInfoOpened(Peer.user(uid)));
+    }
+
+    /**
+     * Fire event when user object became visible
+     *
+     * @param uid user's Id
+     */
+    @ObjectiveCName("onUserVisibleWithUid:")
+    public void onUserVisible(int uid) {
+        modules.getEvents().post(new UserVisible(uid));
     }
 
     /**
@@ -901,6 +924,19 @@ public class Messenger {
     }
 
     /**
+     * Make member admin of group
+     *
+     * @param gid group's id
+     * @param uid user's id
+     * @return Command for execution
+     */
+    @Nullable
+    @ObjectiveCName("makeAdminCommandWithGid:withUid:")
+    public Command<Boolean> makeAdmin(final int gid, final int uid) {
+        return modules.getGroupsModule().makeAdmin(gid, uid);
+    }
+
+    /**
      * Request invite link for group
      *
      * @param gid group's id
@@ -1167,10 +1203,9 @@ public class Messenger {
      * @param fileId file' id
      * @return descriptor if file is downloaded
      */
-    @Deprecated
     @Nullable
-    @ObjectiveCName("getDownloadedDescriptorWithFileId:")
-    public String getDownloadedDescriptor(long fileId) {
+    @ObjectiveCName("findDownloadedDescriptorWithFileId:")
+    public String findDownloadedDescriptor(long fileId) {
         return modules.getFilesModule().getDownloadedDescriptor(fileId);
     }
 
@@ -1471,6 +1506,26 @@ public class Messenger {
         return modules.getSettingsModule().isRenameHintShown();
     }
 
+    /**
+     * Getting selected wallpaper uri. local:[file_name] for local files
+     *
+     * @return not null if custom background set
+     */
+    @ObjectiveCName("getSelectedWallpaper")
+    public String getSelectedWallpaper() {
+        return modules.getSettingsModule().getSelectedWallpapper();
+    }
+
+    /**
+     * Change background
+     *
+     * @param uri background uri
+     */
+    @ObjectiveCName("changeSelectedWallpaper:")
+    public void changeSelectedWallpaper(String uri) {
+        modules.getSettingsModule().changeSelectedWallpapper(uri);
+    }
+
     //////////////////////////////////////
     //            Security
     //////////////////////////////////////
@@ -1510,253 +1565,30 @@ public class Messenger {
     }
 
     //////////////////////////////////////
-    //         User Tracking
+    //          Web Actions
     //////////////////////////////////////
 
     /**
-     * Track phone number authentication screen
-     */
-    @ObjectiveCName("trackAuthPhoneOpen")
-    public void trackAuthPhoneOpen() {
-        modules.getAnalyticsModule().trackAuthPhoneOpen();
-    }
-
-    /**
-     * Track pick country open
-     */
-    @ObjectiveCName("trackAuthCountryOpen")
-    public void trackAuthCountryOpen() {
-        modules.getAnalyticsModule().trackAuthCountryOpen();
-    }
-
-    /**
-     * Track pick country closed
-     */
-    @ObjectiveCName("trackAuthCountryClosed")
-    public void trackAuthCountryClosed() {
-        modules.getAnalyticsModule().trackAuthCountryClosed();
-    }
-
-    /**
-     * Track country picked
-     */
-    @ObjectiveCName("trackAuthCountryPickedWithCountry:")
-    public void trackAuthCountryPicked(String country) {
-        modules.getAnalyticsModule().trackAuthCountryPicked(country);
-    }
-
-    /**
-     * Track auth phone typing
-     */
-    @ObjectiveCName("trackAuthPhoneTypeWithValue:")
-    public void trackAuthPhoneType(String newValue) {
-        modules.getAnalyticsModule().trackAuthPhoneType(newValue);
-    }
-
-    /**
-     * Tack opening why screen
-     */
-    @ObjectiveCName("trackAuthPhoneInfoOpen")
-    public void trackAuthPhoneInfoOpen() {
-        modules.getAnalyticsModule().trackAuthPhoneInfoOpen();
-    }
-
-    /**
-     * Track request code tap
-     */
-    @ObjectiveCName("trackCodeRequest")
-    public void trackCodeRequest() {
-        modules.getAnalyticsModule().trackCodeRequest();
-    }
-
-    @ObjectiveCName("trackAuthCodeTypeWithValue:")
-    public void trackAuthCodeType(String newValue) {
-        modules.getAnalyticsModule().trackAuthCodeType(newValue);
-    }
-
-    @ObjectiveCName("trackBackPressed")
-    public void trackBackPressed() {
-        modules.getAnalyticsModule().trackBackPressed();
-    }
-
-    @ObjectiveCName("trackUpPressed")
-    public void trackUpPressed() {
-        modules.getAnalyticsModule().trackUpPressed();
-    }
-
-    @ObjectiveCName("trackAuthCodeWrongNumber")
-    public void trackAuthCodeWrongNumber() {
-        modules.getAnalyticsModule().trackAuthCodeWrongNumber();
-    }
-
-    @ObjectiveCName("trackAuthCodeWrongNumberCancel")
-    public void trackAuthCodeWrongNumberCancel() {
-        modules.getAnalyticsModule().trackAuthCodeWrongNumberCancel();
-    }
-
-    @ObjectiveCName("trackAuthCodeWrongNumberChange")
-    public void trackAuthCodeWrongNumberChange() {
-        modules.getAnalyticsModule().trackAuthCodeWrongNumberChange();
-    }
-
-    @ObjectiveCName("trackAuthCodeOpen")
-    public void trackAuthCodeOpen() {
-        modules.getAnalyticsModule().trackAuthCodeOpen();
-    }
-
-    @ObjectiveCName("trackAuthCodeClosed")
-    public void trackAuthCodeClosed() {
-        modules.getAnalyticsModule().trackAuthCodeClosed();
-    }
-
-    // Auth signup
-
-    @ObjectiveCName("trackAuthSignupOpen")
-    public void trackAuthSignupOpen() {
-        modules.getAnalyticsModule().trackAuthSignupOpen();
-    }
-
-    @ObjectiveCName("trackAuthSignupClosed")
-    public void trackAuthSignupClosed() {
-        modules.getAnalyticsModule().trackAuthSignupClosed();
-    }
-
-    @ObjectiveCName("trackAuthSignupNameTypeWithValue:")
-    public void trackAuthSignupNameType(String newValue) {
-        modules.getAnalyticsModule().trackAuthSignupClosedNameType(newValue);
-    }
-
-    @ObjectiveCName("trackAuthSignupPressedAvatar")
-    public void trackAuthSignupPressedAvatar() {
-        modules.getAnalyticsModule().trackAuthSignupPressedAvatar();
-    }
-
-    @ObjectiveCName("trackAuthSignupAvatarPicked")
-    public void trackAuthSignupAvatarPicked() {
-        modules.getAnalyticsModule().trackAuthSignupAvatarPicked();
-    }
-
-    @ObjectiveCName("trackAuthSignupAvatarDeleted")
-    public void trackAuthSignupAvatarDeleted() {
-        modules.getAnalyticsModule().trackAuthSignupAvatarDeleted();
-    }
-
-    @ObjectiveCName("trackAuthSignupAvatarCanelled")
-    public void trackAuthSignupAvatarCanelled() {
-        modules.getAnalyticsModule().trackAuthSignupAvatarCanelled();
-    }
-
-    // Auth success
-
-    @ObjectiveCName("trackAuthSuccess")
-    public void trackAuthSuccess() {
-        modules.getAnalyticsModule().trackAuthSuccess();
-    }
-
-    // Main screens
-
-    @ObjectiveCName("trackDialogsOpen")
-    public void trackDialogsOpen() {
-        modules.getAnalyticsModule().trackDialogsOpen();
-    }
-
-    @ObjectiveCName("trackDialogsClosed")
-    public void trackDialogsClosed() {
-        modules.getAnalyticsModule().trackDialogsClosed();
-    }
-
-    @ObjectiveCName("trackContactsOpen")
-    public void trackContactsOpen() {
-        modules.getAnalyticsModule().trackContactsOpen();
-    }
-
-    @ObjectiveCName("trackContactsClosed")
-    public void trackContactsClosed() {
-        modules.getAnalyticsModule().trackContactsClosed();
-    }
-
-    @ObjectiveCName("trackMainScreensOpen")
-    public void trackMainScreensOpen() {
-        modules.getAnalyticsModule().trackMainScreensOpen();
-    }
-
-    @ObjectiveCName("trackMainScreensClosed")
-    public void trackMainScreensClosed() {
-        modules.getAnalyticsModule().trackMainScreensClosed();
-    }
-
-    @ObjectiveCName("trackOwnProfileOpen")
-    public void trackOwnProfileOpen() {
-        modules.getAnalyticsModule().trackOwnProfileOpen();
-    }
-
-    @ObjectiveCName("trackOwnProfileClosed")
-    public void trackOwnProfileClosed() {
-        modules.getAnalyticsModule().trackOwnProfileClosed();
-    }
-
-    // Track message send
-
-    @ObjectiveCName("trackTextSendWithPeer:")
-    public void trackTextSend(Peer peer) {
-        modules.getAnalyticsModule().trackTextSend(peer);
-    }
-
-    @ObjectiveCName("trackPhotoSendWithPeer:")
-    public void trackPhotoSend(Peer peer) {
-        modules.getAnalyticsModule().trackPhotoSend(peer);
-    }
-
-    @ObjectiveCName("trackVideoSendWithPeer:")
-    public void trackVideoSend(Peer peer) {
-        modules.getAnalyticsModule().trackVideoSend(peer);
-    }
-
-    @ObjectiveCName("trackDocumentSendWithPeer:")
-    public void trackDocumentSend(Peer peer) {
-        modules.getAnalyticsModule().trackDocumentSend(peer);
-    }
-
-    /**
-     * Track sync action error
+     * Command for starting web action
      *
-     * @param action  action key
-     * @param tag     error tag
-     * @param message error message that shown to user
+     * @param webAction web action name
+     * @return Command for execution
      */
-    @ObjectiveCName("trackActionError:withTag:withMessage:")
-    public void trackActionError(String action, String tag, String message) {
-        modules.getAnalyticsModule().trackActionError(action, tag, message);
+    @ObjectiveCName("startWebAction:")
+    public Command<WebActionDescriptor> startWebAction(final String webAction) {
+        return modules.getExternalModule().startWebAction(webAction);
     }
 
     /**
-     * Track sync action success
+     * Command for completing web action
      *
-     * @param action action key
+     * @param actionHash web action name
+     * @param url        completion url
+     * @return Command for execution
      */
-    @ObjectiveCName("trackActionSuccess:")
-    public void trackActionSuccess(String action) {
-        modules.getAnalyticsModule().trackActionSuccess(action);
-    }
-
-    /**
-     * Track sync action try again
-     *
-     * @param action action key
-     */
-    @ObjectiveCName("trackActionTryAgain:")
-    public void trackActionTryAgain(String action) {
-        modules.getAnalyticsModule().trackActionTryAgain(action);
-    }
-
-    /**
-     * Track sync action cancel
-     *
-     * @param action action key
-     */
-    @ObjectiveCName("trackActionCancel:")
-    public void trackActionCancel(String action) {
-        modules.getAnalyticsModule().trackActionCancel(action);
+    @ObjectiveCName("completeWebActionWithHash:withUrl:")
+    public Command<Boolean> completeWebAction(final String actionHash, final String url) {
+        return modules.getExternalModule().completeWebAction(actionHash, url);
     }
 
     //////////////////////////////////////

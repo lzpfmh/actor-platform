@@ -1,6 +1,8 @@
 import _ from 'lodash';
 import Immutable from 'immutable';
 import keymirror from 'keymirror';
+import ReactMixin from 'react-mixin';
+import { IntlMixin, FormattedMessage } from 'react-intl';
 
 import React from 'react';
 import { Styles, TextField, FlatButton } from 'material-ui';
@@ -20,9 +22,8 @@ const STEPS = keymirror({
   CONTACTS_SELECTION: null
 });
 
+@ReactMixin.decorate(IntlMixin)
 class CreateGroupForm extends React.Component {
-  static displayName = 'CreateGroupForm'
-
   static childContextTypes = {
     muiTheme: React.PropTypes.object
   };
@@ -62,7 +63,7 @@ class CreateGroupForm extends React.Component {
 
             <div className="modal-new__body">
               <TextField className="login__form__input"
-                         floatingLabelText="Group name"
+                         floatingLabelText={this.getIntlMessage('createGroupGroupName')}
                          fullWidth
                          onChange={this.onNameChange}
                          value={this.state.name}/>
@@ -70,10 +71,7 @@ class CreateGroupForm extends React.Component {
             </div>
 
             <footer className="modal-new__footer text-right">
-              <FlatButton hoverColor="rgba(74,144,226,.12)"
-                          label="Add members"
-                          secondary={true}
-                          type="submit"/>
+              <button className="button button--lightblue" type="submit">{this.getIntlMessage('createGroupAddMembers')}</button>
             </footer>
 
           </form>
@@ -89,7 +87,9 @@ class CreateGroupForm extends React.Component {
         stepForm = (
           <form className="group-members" onSubmit={this.onMembersSubmit}>
 
-            <div className="count">{this.state.selectedUserIds.size} Members</div>
+            <div className="count">
+              <FormattedMessage message={this.getIntlMessage('members')} numMembers={this.state.selectedUserIds.size}/>
+            </div>
 
             <div className="modal-new__body">
               <ul className="contacts__list">
@@ -98,11 +98,7 @@ class CreateGroupForm extends React.Component {
             </div>
 
             <footer className="modal-new__footer text-right">
-              <FlatButton hoverColor="rgba(74,144,226,.12)"
-                          label="Create group"
-                          secondary={true}
-                          type="submit"/>
-
+              <button className="button button--lightblue" type="submit">{this.getIntlMessage('createGroupButton')}</button>
             </footer>
           </form>
         );
@@ -113,10 +109,12 @@ class CreateGroupForm extends React.Component {
   }
 
   onContactToggle = (contact, isSelected) => {
+    const { selectedUserIds } = this.state;
+
     if (isSelected) {
-      this.setState({selectedUserIds: this.state.selectedUserIds.add(contact.uid)});
+      this.setState({selectedUserIds: selectedUserIds.add(contact.uid)});
     } else {
-      this.setState({selectedUserIds: this.state.selectedUserIds.remove(contact.uid)});
+      this.setState({selectedUserIds: selectedUserIds.remove(contact.uid)});
     }
   }
 
@@ -127,18 +125,22 @@ class CreateGroupForm extends React.Component {
   }
 
   onNameSubmit = event => {
+    const { name } = this.state;
+
     event.preventDefault();
-    if (this.state.name) {
-      let name = this.state.name.trim();
-      if (name.length > 0) {
+    if (name) {
+      const trimmedName = name.trim();
+      if (trimmedName.length > 0) {
         this.setState({step: STEPS.CONTACTS_SELECTION});
       }
     }
   }
 
-  onMembersSubmit =event => {
+  onMembersSubmit = event => {
+    const { name, selectedUserIds } = this.state;
+
     event.preventDefault();
-    CreateGroupActionCreators.createGroup(this.state.name, null, this.state.selectedUserIds.toJS());
+    CreateGroupActionCreators.createGroup(name, null, selectedUserIds.toJS());
   }
 }
 
